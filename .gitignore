@@ -8,3 +8,6 @@
 
 #/target
 example/
+.env
+__pycache__/
+*.pyc

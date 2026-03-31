@@ -1,0 +1,33 @@
+name: homebrew-tap
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push formula to tap
+        env:
+          HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          g="${{ secrets.GH_TOKEN }}"
+          t="${{ secrets.HOMEBREW_TAP_TOKEN }}"
+          export TAP_PUSH_TOKEN="${g:-${t:-}}"
+          if [ -z "${TAP_PUSH_TOKEN}" ]; then
+            echo "::error::Set GH_TOKEN or HOMEBREW_TAP_TOKEN in repository secrets."
+            exit 1
+          fi
+          bash scripts/push_homebrew_tap.sh "${{ inputs.tag }}"
