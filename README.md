@@ -8,8 +8,6 @@ Encrypted snapshot vault CLI. Turn any file or folder into a single, password-pr
 
 **Unlike `age` or `gpg`, lurpax combines authenticated encryption with Reed–Solomon error correction — so your backups survive both attackers and bit rot.**
 
-Built by [Erron.ai](https://erron.ai).
-
 <p align="center">
   <img src="docs/demo.gif" alt="lurpax demo: create, corrupt, recover" width="700">
 </p>
@@ -301,3 +299,5 @@ See [SECURITY.md](SECURITY.md) for the full threat model and limitations.
 ## License
 
 MIT
+
+Built by [Erron.ai](https://erron.ai).
