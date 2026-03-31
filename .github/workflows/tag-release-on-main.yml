@@ -1,0 +1,31 @@
+name: tag-release-on-main
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push v{version} if missing
+        run: |
+          set -euo pipefail
+          version="$(python3 -c "
+          import tomllib
+          with open('Cargo.toml', 'rb') as f:
+              print(tomllib.load(f)['package']['version'])
+          ")"
+          tag="v${version}"
+          if git ls-remote --exit-code origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "Tag ${tag} already exists on origin, skipping."
+            exit 0
+          fi
+          git tag "${tag}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${tag}"
+          echo "Pushed ${tag} at ${GITHUB_SHA}"

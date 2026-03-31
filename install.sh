@@ -28,6 +28,9 @@ detect_target() {
 }
 
 get_latest_tag() {
+    # Prefer /releases/latest (stable only). GitHub returns 404 when the newest
+    # release is a prerelease, or when there are no Release objects at all (git
+    # tags alone do not count).
     local response http_code body tag
     response="$(
         curl -sS -w $'\n%{http_code}' \
@@ -36,15 +39,49 @@ get_latest_tag() {
     http_code="${response##*$'\n'}"
     body="${response%$'\n'${http_code}}"
     case "$http_code" in
-        200) ;;
+        200)
+            tag="$(printf '%s\n' "$body" | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
+            ;;
         404)
-            err "no GitHub release for ${REPO}: repo missing/private/unpublished, or no releases yet. Tag v* and run the release workflow, set LURPAX_REPO=owner/repo for a fork, or use: cargo build --release"
+            body="$(
+                curl -sS -w $'\n%{http_code}' \
+                    "https://api.github.com/repos/${REPO}/releases?per_page=1"
+            )" || err "failed to contact GitHub (network or TLS error). Try again or install from source (see README)."
+            http_code="${body##*$'\n'}"
+            body="${body%$'\n'${http_code}}"
+            case "$http_code" in
+                200) ;;
+                *) err "GitHub API HTTP ${http_code} for ${REPO}/releases" ;;
+            esac
+            if printf '%s\n' "$body" | grep -q '"tag_name"'; then
+                tag="$(printf '%s\n' "$body" | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+            else
+                body="$(
+                    curl -sS -w $'\n%{http_code}' \
+                        "https://api.github.com/repos/${REPO}/tags?per_page=100"
+                )" || err "failed to contact GitHub (network or TLS error). Try again or install from source (see README)."
+                http_code="${body##*$'\n'}"
+                body="${body%$'\n'${http_code}}"
+                case "$http_code" in
+                    200) ;;
+                    404) err "no such repo ${REPO} (check LURPAX_REPO=owner/repo)" ;;
+                    *) err "GitHub API HTTP ${http_code} for ${REPO}/tags" ;;
+                esac
+                tag="$(
+                    printf '%s\n' "$body" \
+                        | grep '"name"' \
+                        | cut -d'"' -f4 \
+                        | grep '^v[0-9]' \
+                        | sort -V \
+                        | tail -1
+                )"
+                [ -n "$tag" ] || err "no GitHub Release for ${REPO} (git tags are not releases). Push tag v* and wait for the release workflow to publish assets, set LURPAX_REPO=owner/repo for a fork, or use: cargo build --release"
+            fi
             ;;
         *)
             err "GitHub API HTTP ${http_code} for ${REPO}/releases/latest"
             ;;
     esac
-    tag="$(printf '%s\n' "$body" | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
     [ -n "$tag" ] || err "could not parse latest release tag from API response"
     echo "$tag"
 }
@@ -61,7 +98,8 @@ main() {
     tmpdir="$(mktemp -d)"
     trap 'rm -rf "$tmpdir"' EXIT
 
-    curl -fsSL "$url" -o "${tmpdir}/${name}.tar.gz"
+    curl -fsSL "$url" -o "${tmpdir}/${name}.tar.gz" \
+        || err "failed to download ${url}. If the tag exists but install still fails, the release workflow may not have published binaries yet (GitHub Release + assets), or pick another tag: $0 TAG"
     tar xzf "${tmpdir}/${name}.tar.gz" -C "$tmpdir"
 
     info "installing to ${INSTALL_DIR}/lurpax..."
