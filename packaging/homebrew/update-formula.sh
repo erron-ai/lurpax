@@ -4,7 +4,7 @@
 set -euo pipefail
 
 TAG="${1:?usage: $0 <tag>  e.g. v0.1.0}"
-REPO="erronai/lurpax"
+REPO="erron-ai/lurpax"
 FORMULA="$(dirname "$0")/lurpax.rb"
 
 targets=(

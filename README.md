@@ -1,8 +1,21 @@
 # Lurpax
 
+[![CI](https://github.com/erron-ai/lurpax/actions/workflows/ci.yml/badge.svg)](https://github.com/erron-ai/lurpax/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/lurpax.svg)](https://crates.io/crates/lurpax)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Encrypted snapshot vault CLI. Turn any file or folder into a single, password-protected `.lurpax` file that is compressed, encrypted, and protected against data corruption.
 
-Built by [Erron.ai](https://erron.ai).
+**Unlike `age` or `gpg`, lurpax combines authenticated encryption with Reed–Solomon error correction — so your backups survive both attackers and bit rot.**
+
+<p align="center">
+  <img src="docs/demo.gif" alt="lurpax demo: create, corrupt, recover" width="700">
+</p>
+
+<p align="center">
+  <img src="docs/demo-yubikey.gif" alt="lurpax with YubiKey slot 2: create vault, open, extract file" width="700">
+</p>
+<p align="center"><sub>YubiKey second factor (HMAC-SHA1 challenge-response, slot&nbsp;2).</sub></p>
 
 ## Features
 
@@ -19,26 +32,27 @@ Built by [Erron.ai](https://erron.ai).
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install erronai/tap/lurpax
+brew install erron-ai/tap/lurpax
 ```
+
 
 ### Shell installer
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/erronai/lurpax/main/install.sh | bash
+curl -sSf https://raw.githubusercontent.com/erron-ai/lurpax/main/install.sh | bash
 ```
 
 Or install a specific version:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/erronai/lurpax/main/install.sh | bash -s v0.1.0
+curl -sSf https://raw.githubusercontent.com/erron-ai/lurpax/main/install.sh | bash -s v0.1.0
 ```
 
 Set `LURPAX_INSTALL_DIR` to change the install location (default: `/usr/local/bin`).
 
 ### Pre-built binaries
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/erronai/lurpax/releases), extract, and move `lurpax` to somewhere on your `PATH`:
+Download the latest release for your platform from [GitHub Releases](https://github.com/erron-ai/lurpax/releases), extract, and move `lurpax` to somewhere on your `PATH`:
 
 ```bash
 tar xzf lurpax-v0.1.0-aarch64-apple-darwin.tar.gz
@@ -49,7 +63,7 @@ Available targets: `x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-unknow
 
 ### Cargo (from source)
 
-Requires **Rust 1.85+**.
+Requires **Rust 1.88+**.
 
 ```bash
 cargo install lurpax
@@ -149,7 +163,7 @@ The file must contain a single line with the password. Symlinks are rejected.
 
 ## YubiKey Setup
 
-Lurpax supports YubiKey as a second factor via HMAC-SHA1 challenge-response. When enabled, the YubiKey's response is mixed into key derivation alongside your password, so the vault cannot be opened without both the correct password **and** the physical key.
+Lurpax supports YubiKey as a second factor via HMAC-SHA1 challenge-response. When enabled, the YubiKey's response is mixed into key derivation alongside your password, so the vault cannot be opened without both the correct password **and** the physical key. An animated walkthrough is shown near the top of this README.
 
 > **Supported keys:** Any YubiKey that supports HMAC-SHA1 challenge-response (YubiKey 4, YubiKey 5 series, and later). Slot 1 and slot 2 are both accepted; slot 2 is recommended because slot 1 is pre-programmed with Yubico OTP on most keys out of the box.
 
@@ -285,3 +299,5 @@ See [SECURITY.md](SECURITY.md) for the full threat model and limitations.
 ## License
 
 MIT
+
+Built by [Erron.ai](https://erron.ai).

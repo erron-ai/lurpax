@@ -32,9 +32,8 @@ fn validate_ykman_path(path: &Path) -> Result<()> {
     if meta.is_symlink() {
         return Err(LurpaxError::YubiKey(format!(
             "ykman path must not be a symlink. Package managers (e.g. Homebrew) symlink `bin/ykman`; lurpax only executes a regular file.\n\
-             Set {} to the symlink target. Hint: `ls -l \"$(which ykman)\"` shows it; on Linux `readlink -f \"$(which ykman)\"` prints the path.\n\
-             See README (YubiKey Setup).",
-            ENV_YKMAN_PATH
+             Set {ENV_YKMAN_PATH} to the symlink target. Hint: `ls -l \"$(which ykman)\"` shows it; on Linux `readlink -f \"$(which ykman)\"` prints the path.\n\
+             See README (YubiKey Setup)."
         )));
     }
     if !meta.is_file() {
@@ -61,12 +60,12 @@ fn validate_ykman_path(path: &Path) -> Result<()> {
             if anc.as_os_str().is_empty() {
                 break;
             }
-            if let Ok(m) = fs::metadata(anc) {
-                if is_world_writable(m.mode()) {
-                    return Err(LurpaxError::YubiKey(
-                        "ykman parent directory must not be world-writable".into(),
-                    ));
-                }
+            if let Ok(m) = fs::metadata(anc)
+                && is_world_writable(m.mode())
+            {
+                return Err(LurpaxError::YubiKey(
+                    "ykman parent directory must not be world-writable".into(),
+                ));
             }
         }
     }
@@ -77,8 +76,7 @@ fn resolve_ykman_path() -> Result<PathBuf> {
     if let Ok(p) = std::env::var(ENV_YKMAN_PATH) {
         // AUDIT: env-override bypasses the standard search list; warn the user.
         eprintln!(
-            "warning: using ykman from {} (env override bypasses standard path search)",
-            ENV_YKMAN_PATH,
+            "warning: using ykman from {ENV_YKMAN_PATH} (env override bypasses standard path search)"
         );
         let pb = PathBuf::from(p);
         validate_ykman_path(&pb)?;
@@ -149,8 +147,7 @@ impl YubiKeyPort for RealYubiKey {
         }
         let ykman = resolve_ykman_path()?;
         eprintln!(
-            "YubiKey: touch the key now if it flashes or blinks (challenge-response, slot {}).",
-            slot
+            "YubiKey: touch the key now if it flashes or blinks (challenge-response, slot {slot})."
         );
         let mut cmd = Command::new(&ykman);
         cmd.args(["otp", "calculate", &slot.to_string()])

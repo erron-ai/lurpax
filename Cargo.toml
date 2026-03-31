@@ -2,12 +2,12 @@
 name = "lurpax"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 description = "Lurpax — encrypted snapshot vault CLI (Erron.ai)"
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/erronai/lurpax"
-homepage = "https://github.com/erronai/lurpax"
+repository = "https://github.com/erron-ai/lurpax"
+homepage = "https://github.com/erron-ai/lurpax"
 keywords = ["encryption", "backup", "vault", "security", "cli"]
 categories = ["command-line-utilities", "cryptography"]
 
