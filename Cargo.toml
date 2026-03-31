@@ -1,0 +1,52 @@
+[package]
+name = "lurpax"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+description = "Lurpax — encrypted snapshot vault CLI (Erron.ai)"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+
+[[bin]]
+name = "lurpax"
+path = "src/main.rs"
+
+[dependencies]
+# CLI and UX
+clap = { version = "4.5", features = ["derive"] }
+rpassword = "7.3"
+# Typed errors for auditable failure paths (rejected anyhow: opaque)
+thiserror = "1.0"
+
+# Password hashing — Argon2id only in v1
+argon2 = "=0.5.3"
+# HKDF subkey separation from Argon2 master output (pinned per audit policy)
+hkdf = "=0.12.4"
+# HMAC-SHA256 key commitment (domain-separated from AEAD key, pinned per audit policy)
+hmac = "=0.12.1"
+sha2 = "=0.10.8"
+# XChaCha20-Poly1305 per-chunk AEAD (pinned per audit policy)
+chacha20poly1305 = "=0.10.1"
+
+# Reed–Solomon parity shards for burst corruption recovery
+reed-solomon-erasure = "6.0.0"
+# Fast non-cryptographic shard integrity pre-check (accidental corruption only)
+crc32c = "0.6.8"
+
+# Whole-stream compression before chunking (correct order: compress-then-encrypt chunks)
+zstd = "0.13.2"
+# Tar container for file tree snapshot
+tar = "0.4.41"
+
+# Zeroization of key material; memsec pins sensitive pages from swap where supported
+zeroize = { version = "1.7", features = ["zeroize_derive"] }
+memsec = "0.6.3"
+# OS CSPRNG — failures are fatal (no userland fallback)
+getrandom = "0.2.15"
+# Cooperative shutdown without unsafe signal-handler work
+signal-hook = "0.3.17"
+# RLIMIT_CORE / platform hooks for hardening
+libc = "0.2.169"
+
+[dev-dependencies]
+tempfile = "3.14"
