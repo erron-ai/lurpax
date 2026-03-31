@@ -10,7 +10,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
@@ -19,7 +19,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: clippy
       - run: cargo clippy --workspace --all-targets -- -D warnings
@@ -28,21 +28,21 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.85.0
       - run: cargo test --workspace
 
   doc:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.85.0
       - run: RUSTDOCFLAGS='-D warnings' cargo doc --no-deps
 
   deny:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.85.0
       - uses: EmbarkStudios/cargo-deny-action@v1
         with:
           command: check
@@ -51,14 +51,14 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.85.0
       - run: cargo install cargo-audit && cargo audit
 
   msrv:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.74
+      - uses: dtolnay/rust-toolchain@1.85.0
       - run: cargo check --workspace
 
   coverage:
