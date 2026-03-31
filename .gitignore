@@ -19,6 +19,8 @@ id_ed25519
 
 # User vaults and password files (local testing)
 *.lurpax
+docs/yubikey-demo.cast
+docs/*yubikey*demo*.sh
 example/pwd.txt
 example/data/
 

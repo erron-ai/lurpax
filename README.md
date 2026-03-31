@@ -162,6 +162,10 @@ The file must contain a single line with the password. Symlinks are rejected.
 
 Lurpax supports YubiKey as a second factor via HMAC-SHA1 challenge-response. When enabled, the YubiKey's response is mixed into key derivation alongside your password, so the vault cannot be opened without both the correct password **and** the physical key.
 
+<p align="center">
+  <img src="docs/demo-yubikey.gif" alt="lurpax with YubiKey slot 2: create vault, open, extract file" width="700">
+</p>
+
 > **Supported keys:** Any YubiKey that supports HMAC-SHA1 challenge-response (YubiKey 4, YubiKey 5 series, and later). Slot 1 and slot 2 are both accepted; slot 2 is recommended because slot 1 is pre-programmed with Yubico OTP on most keys out of the box.
 
 ### Prerequisites
