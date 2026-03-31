@@ -1,8 +1,18 @@
 # Lurpax
 
+[![CI](https://github.com/erron-ai/lurpax/actions/workflows/ci.yml/badge.svg)](https://github.com/erron-ai/lurpax/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/lurpax.svg)](https://crates.io/crates/lurpax)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 Encrypted snapshot vault CLI. Turn any file or folder into a single, password-protected `.lurpax` file that is compressed, encrypted, and protected against data corruption.
 
+**Unlike `age` or `gpg`, lurpax combines authenticated encryption with Reed–Solomon error correction — so your backups survive both attackers and bit rot.**
+
 Built by [Erron.ai](https://erron.ai).
+
+<p align="center">
+  <img src="docs/demo.gif" alt="lurpax demo: create, corrupt, recover" width="700">
+</p>
 
 ## Features
 
@@ -19,14 +29,9 @@ Built by [Erron.ai](https://erron.ai).
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install lurpax
-```
-
-Or, if the formula is not yet in Homebrew core:
-
-```bash
 brew install erron-ai/tap/lurpax
 ```
+
 
 ### Shell installer
 
@@ -55,7 +60,7 @@ Available targets: `x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-unknow
 
 ### Cargo (from source)
 
-Requires **Rust 1.85+**.
+Requires **Rust 1.88+**.
 
 ```bash
 cargo install lurpax
