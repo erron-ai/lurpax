@@ -4,9 +4,6 @@ on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write
-
 env:
   CARGO_TERM_COLOR: always
 
@@ -25,6 +22,10 @@ jobs:
             os: ubuntu-latest
 
     runs-on: ${{ matrix.os }}
+
+    permissions:
+      contents: read
+      actions: write
 
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +77,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+      actions: read
+
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -97,6 +102,10 @@ jobs:
   crates-io:
     needs: build
     runs-on: macos-latest
+
+    permissions:
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
@@ -113,6 +122,10 @@ jobs:
   update-homebrew-tap:
     needs: publish
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
     steps:
       - uses: actions/checkout@v4
 

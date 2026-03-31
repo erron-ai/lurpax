@@ -1,13 +1,52 @@
-/target
-.DS_Store
-.cursor
-.claude/
-# Added by cargo
-#
-# already existing elements were commented out
+# Rust / Cargo
+target/
+**/*.rs.bk
+.cargo/credentials.toml
 
-#/target
-example/
+# Local env and secrets (never commit)
 .env
+.env.*
+!.env.example
+.envrc
+
+# Keys and material that must not land in git
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*.age
+
+# User vaults and password files (local testing)
+*.lurpax
+example/pwd.txt
+example/data/
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Tooling / IDE
+.DS_Store
+Thumbs.db
+.cursor
+.claude/
+.idea/
+*.swp
+*.swo
+*~
+
+# Coverage / local profiling
+*.profraw
+*.profdata
+lcov.info
+coverage/
+
+# Merge / patch debris
+*.orig
+*.rej
