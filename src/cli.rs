@@ -15,12 +15,37 @@ use crate::vault::VaultService;
 
 /// Lurpax — encrypted snapshot vault (Erron.ai).
 #[derive(Parser, Debug)]
-#[command(name = "lurpax", version, about)]
+#[command(name = "lurpax", version, about, after_long_help = YUBIKEY_HELP)]
 pub struct Cli {
     /// Subcommand to execute.
     #[command(subcommand)]
     pub command: Commands,
 }
+
+const YUBIKEY_HELP: &str = "\
+YUBIKEY SETUP:
+  Lurpax supports YubiKey as a second factor via HMAC-SHA1 challenge-response.
+  The YubiKey response is mixed into key derivation alongside your password.
+
+  1. Install YubiKey Manager CLI:
+       brew install ykman          # macOS
+       sudo apt install yubikey-manager  # Debian/Ubuntu
+       pip install yubikey-manager  # or via pip
+
+  2. Program a slot for HMAC-SHA1 challenge-response:
+       ykman otp chalresp --touch --generate 2   # slot 2, require touch
+     Use slot 2 unless slot 1 is free (slot 1 is often used by Yubico OTP).
+
+  3. Create a vault with YubiKey:
+       lurpax create --output vault.lurpax --input ./data --yubikey-slot 2
+     Touch the key when it blinks.
+
+  4. Open/decrypt — just have the same YubiKey inserted:
+       lurpax open --vault vault.lurpax --out-dir ./restored
+     The vault header stores the slot and challenge; no extra flags needed.
+
+  ykman is found at /usr/bin/ykman, /usr/local/bin/ykman, or
+  /opt/homebrew/bin/ykman. Override with LURPAX_YKMAN_PATH=/path/to/ykman.";
 
 /// Available subcommands.
 #[derive(Subcommand, Debug)]
@@ -36,8 +61,12 @@ pub enum Commands {
         /// Read password from file (non-interactive).
         #[arg(long)]
         password_file: Option<PathBuf>,
-        /// YubiKey OTP slot (1 or 2).
-        #[arg(long)]
+        /// YubiKey HMAC-SHA1 challenge-response slot (1 or 2).
+        ///
+        /// Requires `ykman` CLI and a slot configured with `ykman otp chalresp`.
+        /// The response is mixed into key derivation as a second factor.
+        /// See `lurpax --help` for full setup instructions.
+        #[arg(long, value_name = "SLOT")]
         yubikey_slot: Option<u8>,
         /// Maximum total input bytes.
         #[arg(long)]
