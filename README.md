@@ -22,6 +22,12 @@ Built by [Erron.ai](https://erron.ai).
 brew install lurpax
 ```
 
+Or, if the formula is not yet in Homebrew core:
+
+```bash
+brew install erronai/tap/lurpax
+```
+
 ### Shell installer
 
 ```bash
