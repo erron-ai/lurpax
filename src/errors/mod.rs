@@ -71,7 +71,9 @@ pub enum LurpaxError {
 
 /// Cooperative shutdown check (e.g. SIGINT mapped to `AtomicBool`).
 pub fn check_interrupted(term: Option<&Arc<AtomicBool>>) -> Result<()> {
-    if let Some(t) = term && t.load(Ordering::Relaxed) {
+    if let Some(t) = term
+        && t.load(Ordering::Relaxed)
+    {
         return Err(LurpaxError::Interrupted);
     }
     Ok(())

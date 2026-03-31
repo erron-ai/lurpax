@@ -60,7 +60,9 @@ fn validate_ykman_path(path: &Path) -> Result<()> {
             if anc.as_os_str().is_empty() {
                 break;
             }
-            if let Ok(m) = fs::metadata(anc) && is_world_writable(m.mode()) {
+            if let Ok(m) = fs::metadata(anc)
+                && is_world_writable(m.mode())
+            {
                 return Err(LurpaxError::YubiKey(
                     "ykman parent directory must not be world-writable".into(),
                 ));

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Runs the same Rust checks as CI (fmt, clippy, locked metadata, tests).
+# Install: ./scripts/install-git-hooks.sh
+# Skip tests: PRE_COMMIT_SKIP_TESTS=1 git commit ...
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+echo "pre-commit: cargo metadata --locked..."
+cargo metadata --locked --format-version 1 >/dev/null
+
+echo "pre-commit: cargo fmt --check..."
+cargo fmt --all -- --check
+
+echo "pre-commit: cargo clippy..."
+cargo clippy --locked --workspace --all-targets -- -D warnings
+
+if [[ "${PRE_COMMIT_SKIP_TESTS:-}" == 1 ]]; then
+	echo "pre-commit: skipping cargo test (PRE_COMMIT_SKIP_TESTS=1)"
+else
+	echo "pre-commit: cargo test..."
+	cargo test --locked --workspace
+fi
+
+echo "pre-commit: OK"
