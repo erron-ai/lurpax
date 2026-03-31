@@ -1,5 +1,8 @@
 //! Typed errors — no sensitive material in `Display` output.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+
 use thiserror::Error;
 
 /// Library result alias.
@@ -64,6 +67,16 @@ pub enum LurpaxError {
     /// Numeric overflow when computing sizes.
     #[error("size arithmetic overflow")]
     Overflow,
+}
+
+/// Cooperative shutdown check (e.g. SIGINT mapped to `AtomicBool`).
+pub fn check_interrupted(term: Option<&Arc<AtomicBool>>) -> Result<()> {
+    if let Some(t) = term {
+        if t.load(Ordering::Relaxed) {
+            return Err(LurpaxError::Interrupted);
+        }
+    }
+    Ok(())
 }
 
 /// Verify health classification for reporting (not an error until mapped to exit code).

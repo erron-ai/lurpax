@@ -69,7 +69,7 @@ fn extract_unsafe_path_component() {
         builder.finish().unwrap();
     }
     let dir = tempfile::tempdir().unwrap();
-    let err = extract_tar(buf.as_slice(), dir.path(), &ArchiveLimits::default()).unwrap_err();
+    let err = extract_tar(buf.as_slice(), dir.path(), &ArchiveLimits::default(), None).unwrap_err();
     assert!(matches!(err, LurpaxError::UnsafeArchive(_)));
 }
 
@@ -83,15 +83,13 @@ fn extract_unsupported_entry_type() {
         header.set_path("link.txt").unwrap();
         header.set_size(0);
         header.set_mode(0o777);
-        header
-            .set_link_name("target.txt")
-            .unwrap();
+        header.set_link_name("target.txt").unwrap();
         header.set_cksum();
         builder.append(&header, &[] as &[u8]).unwrap();
         builder.finish().unwrap();
     }
     let dir = tempfile::tempdir().unwrap();
-    let err = extract_tar(buf.as_slice(), dir.path(), &ArchiveLimits::default()).unwrap_err();
+    let err = extract_tar(buf.as_slice(), dir.path(), &ArchiveLimits::default(), None).unwrap_err();
     assert!(matches!(err, LurpaxError::UnsafeArchive(_)));
 }
 

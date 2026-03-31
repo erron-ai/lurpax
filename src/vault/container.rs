@@ -6,7 +6,9 @@ use std::path::Path;
 
 use crate::constants::MAGIC;
 use crate::errors::{LurpaxError, Result};
-use crate::vault::header::{expected_file_len, read_header_len_prefix, shard_cipher_size, total_shards, Header};
+use crate::vault::header::{
+    expected_file_len, read_header_len_prefix, shard_cipher_size, total_shards, Header,
+};
 
 /// Parsed vault layout references.
 pub struct VaultLayout {
@@ -88,7 +90,9 @@ pub fn read_header_any(file: &mut File) -> Result<(Header, Vec<u8>)> {
             let v = read_tail_header(file, len)?;
             let exp = expected_file_len(&v.0, v.1.len() as u32)?;
             if exp != len {
-                return Err(LurpaxError::InvalidVault("file size mismatch (tail)".into()));
+                return Err(LurpaxError::InvalidVault(
+                    "file size mismatch (tail)".into(),
+                ));
             }
             Ok(v)
         }
@@ -96,8 +100,11 @@ pub fn read_header_any(file: &mut File) -> Result<(Header, Vec<u8>)> {
 }
 
 /// Loads shards and CRC table after the header prefix.
-pub fn read_payload(
-    file: &mut File,
+///
+/// `reader` must be seekable from the start of the vault file; this function seeks to the first
+/// shard byte (`9 + header_body.len()` from the beginning).
+pub fn read_payload<R: Read + Seek>(
+    reader: &mut R,
     header: &Header,
     header_body: Vec<u8>,
 ) -> Result<VaultLayout> {
@@ -108,23 +115,19 @@ pub fn read_payload(
     let off = 9u64
         .checked_add(header_body.len() as u64)
         .ok_or(LurpaxError::Overflow)?;
-    file.seek(SeekFrom::Start(off))?;
-    let ss = shard_cipher_size(header)? as usize;
-    let ts = total_shards(header)? as usize;
-    let _shard_bytes = ss
-        .checked_mul(ts)
-        .ok_or(LurpaxError::Overflow)?;
+    reader.seek(SeekFrom::Start(off))?;
+    let ss = usize::try_from(shard_cipher_size(header)?).map_err(|_| LurpaxError::Overflow)?;
+    let ts = usize::try_from(total_shards(header)?).map_err(|_| LurpaxError::Overflow)?;
+    let _shard_bytes = ss.checked_mul(ts).ok_or(LurpaxError::Overflow)?;
     let mut shards = Vec::with_capacity(ts);
     for _ in 0..ts {
         let mut s = vec![0u8; ss];
-        file.read_exact(&mut s)?;
+        reader.read_exact(&mut s)?;
         shards.push(s);
     }
-    let crc_len = ts
-        .checked_mul(4)
-        .ok_or(LurpaxError::Overflow)?;
+    let crc_len = ts.checked_mul(4).ok_or(LurpaxError::Overflow)?;
     let mut crc_table = vec![0u8; crc_len];
-    let crc_read = file.read(&mut crc_table)?;
+    let crc_read = reader.read(&mut crc_table)?;
     let crc_table_valid = crc_read == crc_len;
     if !crc_table_valid {
         crc_table.truncate(crc_read);
@@ -158,10 +161,7 @@ pub fn write_atomic(
         use std::os::unix::fs::OpenOptionsExt;
         oo.mode(0o600);
     }
-    let mut f = match oo.open(&tmp) {
-        Ok(f) => f,
-        Err(e) => return Err(e.into()),
-    };
+    let mut f = oo.open(&tmp)?;
     let n = u32::try_from(header_body.len()).map_err(|_| LurpaxError::Overflow)?;
     let write_body = (|| -> Result<()> {
         f.write_all(MAGIC)?;
@@ -199,7 +199,7 @@ pub fn layout_shards_with_rs(data_shards: Vec<Vec<u8>>, header: &Header) -> Resu
 
     let d = header.rs_data_shards_per_group as usize;
     let p = header.rs_parity_shards_per_group as usize;
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let mut out = Vec::new();
     let mut i = 0usize;
     while i < n {

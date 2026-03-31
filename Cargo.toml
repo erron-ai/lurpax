@@ -49,4 +49,5 @@ signal-hook = "0.3.17"
 libc = "0.2.169"
 
 [dev-dependencies]
+proptest = "1"
 tempfile = "3.14"

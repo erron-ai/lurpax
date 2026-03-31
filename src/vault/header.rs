@@ -86,9 +86,7 @@ impl Header {
         macro_rules! take {
             ($n:expr) => {{
                 let n = $n;
-                let end = off
-                    .checked_add(n)
-                    .ok_or(LurpaxError::Overflow)?;
+                let end = off.checked_add(n).ok_or(LurpaxError::Overflow)?;
                 if end > buf.len() {
                     return Err(LurpaxError::InvalidVault("truncated header".into()));
                 }
@@ -207,13 +205,19 @@ impl Header {
         }
         // AUDIT: reject out-of-policy KDF params to prevent downgrade and DoS
         if !(MIN_ARGON2_MEM_KIB..=MAX_ARGON2_MEM_KIB).contains(&self.argon2_mem_kib) {
-            return Err(LurpaxError::InvalidVault("argon2 memory out of policy".into()));
+            return Err(LurpaxError::InvalidVault(
+                "argon2 memory out of policy".into(),
+            ));
         }
         if !(MIN_ARGON2_ITERATIONS..=MAX_ARGON2_ITERATIONS).contains(&self.argon2_iterations) {
-            return Err(LurpaxError::InvalidVault("argon2 iterations out of policy".into()));
+            return Err(LurpaxError::InvalidVault(
+                "argon2 iterations out of policy".into(),
+            ));
         }
         if !(MIN_ARGON2_PARALLELISM..=MAX_ARGON2_PARALLELISM).contains(&self.argon2_parallelism) {
-            return Err(LurpaxError::InvalidVault("argon2 parallelism out of policy".into()));
+            return Err(LurpaxError::InvalidVault(
+                "argon2 parallelism out of policy".into(),
+            ));
         }
         if self.chunk_plaintext_size != CHUNK_PLAINTEXT_SIZE {
             return Err(LurpaxError::InvalidVault("chunk size mismatch".into()));
@@ -226,6 +230,8 @@ impl Header {
         if self.chunk_count == 0 {
             return Err(LurpaxError::InvalidVault("chunk_count is zero".into()));
         }
+        let _chunk_count_usize =
+            usize::try_from(self.chunk_count).map_err(|_| LurpaxError::Overflow)?;
         if self.yubi_required {
             if self.yubi_slot != 1 && self.yubi_slot != 2 {
                 return Err(LurpaxError::InvalidVault("invalid yubi_slot".into()));
@@ -235,16 +241,22 @@ impl Header {
                 return Err(LurpaxError::InvalidVault("yubi_slot must be 0".into()));
             }
             if self.yubi_challenge != [0u8; 32] {
-                return Err(LurpaxError::InvalidVault("yubi_challenge must be zeroed".into()));
+                return Err(LurpaxError::InvalidVault(
+                    "yubi_challenge must be zeroed".into(),
+                ));
             }
         }
         let last = last_chunk_plaintext_size(self)?;
         let full = u64::from(self.chunk_plaintext_size);
         if last > full {
-            return Err(LurpaxError::InvalidVault("compressed size vs chunks".into()));
+            return Err(LurpaxError::InvalidVault(
+                "compressed size vs chunks".into(),
+            ));
         }
         if self.chunk_count > 1 && last == 0 {
-            return Err(LurpaxError::InvalidVault("compressed size vs chunks".into()));
+            return Err(LurpaxError::InvalidVault(
+                "compressed size vs chunks".into(),
+            ));
         }
         Ok(())
     }
@@ -274,10 +286,7 @@ pub fn total_shards(header: &Header) -> Result<u64> {
     let p = u64::from(header.rs_parity_shards_per_group);
     header
         .chunk_count
-        .checked_add(
-            g.checked_mul(p)
-                .ok_or(LurpaxError::Overflow)?,
-        )
+        .checked_add(g.checked_mul(p).ok_or(LurpaxError::Overflow)?)
         .ok_or(LurpaxError::Overflow)
 }
 
@@ -292,9 +301,7 @@ pub fn last_chunk_plaintext_size(header: &Header) -> Result<u64> {
         }
         return Ok(total);
     }
-    let prefix = full
-        .checked_mul(c - 1)
-        .ok_or(LurpaxError::Overflow)?;
+    let prefix = full.checked_mul(c - 1).ok_or(LurpaxError::Overflow)?;
     if total < prefix {
         return Err(LurpaxError::InvalidVault("compressed size".into()));
     }
@@ -314,12 +321,8 @@ pub fn expected_file_len(header: &Header, header_body_len: u32) -> Result<u64> {
         .ok_or(LurpaxError::Overflow)?;
     let ss = shard_cipher_size(header)?;
     let ts = total_shards(header)?;
-    let shards = ss
-        .checked_mul(ts)
-        .ok_or(LurpaxError::Overflow)?;
-    let crc = ts
-        .checked_mul(4)
-        .ok_or(LurpaxError::Overflow)?;
+    let shards = ss.checked_mul(ts).ok_or(LurpaxError::Overflow)?;
+    let crc = ts.checked_mul(4).ok_or(LurpaxError::Overflow)?;
     let tail = h
         .checked_add(4)
         .and_then(|x| x.checked_add(5))

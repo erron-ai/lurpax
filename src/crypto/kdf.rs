@@ -3,7 +3,7 @@
 use argon2::{Algorithm, Argon2, Params, Version};
 use hkdf::Hkdf;
 use sha2::Sha256;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::constants::{
     ARGON2_OUTPUT_LEN, HKDF_INFO_COMMIT, HKDF_INFO_ENC, MAX_PASSWORD_LEN, MIN_PASSWORD_LEN,
@@ -11,7 +11,7 @@ use crate::constants::{
 use crate::errors::{LurpaxError, Result};
 
 /// Builds length-prefixed input keying material for Argon2id.
-pub fn compose_ikm(password: &[u8], yubi_response: Option<&[u8]>) -> Result<Vec<u8>> {
+pub fn compose_ikm(password: &[u8], yubi_response: Option<&[u8]>) -> Result<Zeroizing<Vec<u8>>> {
     // AUDIT: reject empty and oversized passwords before KDF work
     if !(MIN_PASSWORD_LEN..=MAX_PASSWORD_LEN).contains(&password.len()) {
         return Err(LurpaxError::Password(
@@ -27,7 +27,7 @@ pub fn compose_ikm(password: &[u8], yubi_response: Option<&[u8]>) -> Result<Vec<
         v.extend_from_slice(&rl.to_le_bytes());
         v.extend_from_slice(r);
     }
-    Ok(v)
+    Ok(Zeroizing::new(v))
 }
 
 /// Derives 64-byte master secret with Argon2id into `master_out`.

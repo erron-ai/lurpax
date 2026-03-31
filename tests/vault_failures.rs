@@ -16,7 +16,15 @@ fn output_exists_rejected() {
     let vault = make_vault(dir.path(), b"pass1");
     let src2 = dir.path().join("other.txt");
     std::fs::write(&src2, b"second").unwrap();
-    let r = VaultService::create(&vault, &src2, b"pass1", None, None, ArchiveLimits::default(), None);
+    let r = VaultService::create(
+        &vault,
+        &src2,
+        b"pass1",
+        None,
+        None,
+        ArchiveLimits::default(),
+        None,
+    );
     assert!(matches!(r, Err(LurpaxError::OutputExists)));
 }
 
@@ -26,7 +34,15 @@ fn empty_password_rejected() {
     let src = dir.path().join("f.txt");
     std::fs::write(&src, b"x").unwrap();
     let vault = dir.path().join("v.lurpax");
-    let r = VaultService::create(&vault, &src, b"", None, None, ArchiveLimits::default(), None);
+    let r = VaultService::create(
+        &vault,
+        &src,
+        b"",
+        None,
+        None,
+        ArchiveLimits::default(),
+        None,
+    );
     assert!(matches!(r, Err(LurpaxError::Password(_))));
 }
 
@@ -37,7 +53,15 @@ fn password_too_long_rejected() {
     std::fs::write(&src, b"x").unwrap();
     let vault = dir.path().join("v.lurpax");
     let long_pw = vec![b'A'; 9000];
-    let r = VaultService::create(&vault, &src, &long_pw, None, None, ArchiveLimits::default(), None);
+    let r = VaultService::create(
+        &vault,
+        &src,
+        &long_pw,
+        None,
+        None,
+        ArchiveLimits::default(),
+        None,
+    );
     assert!(matches!(r, Err(LurpaxError::Password(_))));
 }
 
@@ -81,12 +105,22 @@ fn tampered_ciphertext_fails() {
 
     let out = dir.path().join("out");
     std::fs::create_dir(&out).unwrap();
-    let r = VaultService::open(&vault, &out, b"secure", None, ArchiveLimits::default(), None);
+    let r = VaultService::open(
+        &vault,
+        &out,
+        b"secure",
+        None,
+        ArchiveLimits::default(),
+        None,
+    );
     // RS may transparently repair a single-byte flip, so either Ok or AEAD failure is acceptable.
     // The key invariant: if open returns Ok, the extracted content is authentic.
     if let Err(e) = r {
         assert!(
-            matches!(e, LurpaxError::DecryptAuthFailed | LurpaxError::UnrecoverableDamage(_)),
+            matches!(
+                e,
+                LurpaxError::DecryptAuthFailed | LurpaxError::UnrecoverableDamage(_)
+            ),
             "unexpected error variant: {e:?}"
         );
     }

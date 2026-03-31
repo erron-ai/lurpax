@@ -3,12 +3,12 @@
 use std::fs::File;
 use std::io::{Seek, SeekFrom};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use zeroize::{Zeroize, Zeroizing};
 
-use crate::archive::{ArchiveLimits, extract_tar, tar_input};
+use crate::archive::{extract_tar, tar_input, ArchiveLimits};
 use crate::constants::{
     CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, KDF_ARGON2ID, RS_DATA_SHARDS_PER_GROUP,
     RS_PARITY_SHARDS_PER_GROUP,
@@ -17,7 +17,7 @@ use crate::crypto::{
     commitment_hmac, compose_ikm, decrypt_single_chunk, derive_subkeys, encrypt_all_chunks,
     verify_commitment, zeroize_master,
 };
-use crate::errors::{LurpaxError, Result, VerifyHealth};
+use crate::errors::{check_interrupted, LurpaxError, Result, VerifyHealth};
 use crate::hardware::YubiKeyPort;
 use crate::recovery::checksum::damaged_from_table;
 use crate::recovery::fec::repair_group;
@@ -63,15 +63,6 @@ fn try_mlock_secret(buf: &mut [u8]) {
     }
 }
 
-fn check_interrupted(term: &Option<Arc<AtomicBool>>) -> Result<()> {
-    if let Some(t) = term {
-        if t.load(Ordering::Relaxed) {
-            return Err(LurpaxError::Interrupted);
-        }
-    }
-    Ok(())
-}
-
 fn derive_keys_from_password(
     header: &Header,
     password: &[u8],
@@ -99,7 +90,7 @@ fn derive_keys_from_password(
 fn collect_data_shards(shards: &[Vec<u8>], header: &Header) -> Result<Vec<Zeroizing<Vec<u8>>>> {
     let d = header.rs_data_shards_per_group as usize;
     let p = header.rs_parity_shards_per_group as usize;
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let mut out = Vec::with_capacity(n);
     let mut idx = 0usize;
     let mut pos = 0usize;
@@ -118,14 +109,10 @@ fn collect_data_shards(shards: &[Vec<u8>], header: &Header) -> Result<Vec<Zeroiz
     Ok(out)
 }
 
-fn repair_all_groups(
-    shards: &mut [Vec<u8>],
-    header: &Header,
-    damaged: &[bool],
-) -> Result<usize> {
+fn repair_all_groups(shards: &mut [Vec<u8>], header: &Header, damaged: &[bool]) -> Result<usize> {
     let d = header.rs_data_shards_per_group as usize;
     let p = header.rs_parity_shards_per_group as usize;
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let mut pos = 0usize;
     let mut idx = 0usize;
     let mut repaired = 0usize;
@@ -161,13 +148,10 @@ fn chunk_to_shard_index(chunk_index: usize, header: &Header) -> usize {
 }
 
 /// Maps a flat shard-array index to the group it belongs to (group_start_shard_idx, data_count, parity_count).
-fn shard_group_range(
-    shard_index: usize,
-    header: &Header,
-) -> Result<(usize, usize, usize)> {
+fn shard_group_range(shard_index: usize, header: &Header) -> Result<(usize, usize, usize)> {
     let d = header.rs_data_shards_per_group as usize;
     let p = header.rs_parity_shards_per_group as usize;
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let mut pos = 0usize;
     let mut idx = 0usize;
     while idx < n {
@@ -179,7 +163,9 @@ fn shard_group_range(
         pos += group_len;
         idx += k;
     }
-    Err(LurpaxError::InvalidVault("shard index out of layout".into()))
+    Err(LurpaxError::InvalidVault(
+        "shard index out of layout".into(),
+    ))
 }
 
 /// Copies data shards for the flat group starting at `gstart` into `data_shards` at the
@@ -193,7 +179,7 @@ fn sync_data_shards_after_group_repair(
 ) -> Result<()> {
     let d = header.rs_data_shards_per_group as usize;
     let p = header.rs_parity_shards_per_group as usize;
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let mut pos = 0usize;
     let mut idx = 0usize;
     while idx < n {
@@ -231,28 +217,40 @@ impl VaultService {
         if output.exists() {
             return Err(LurpaxError::OutputExists);
         }
-        check_interrupted(&term)?;
+        let partial = output.with_extension("lurpax.partial");
+        if partial.exists() {
+            eprintln!("warning: removing stale partial vault file from interrupted create");
+            std::fs::remove_file(&partial)?;
+        }
+        check_interrupted(term.as_ref())?;
         let tar = tar_input(input, &limits)?;
-        check_interrupted(&term)?;
+        check_interrupted(term.as_ref())?;
         let compressed = zstd_compress(&tar)?;
         let comp_len = compressed.len() as u64;
+        const LARGE_VAULT_WARN_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+        if comp_len > LARGE_VAULT_WARN_BYTES {
+            eprintln!(
+                "warning: compressed payload is {} GiB; opening this vault will require significant RAM",
+                comp_len / (1024 * 1024 * 1024)
+            );
+        }
         let chunk_count = chunk_count_for_compressed(comp_len);
         let salt = random32()?;
         let base_nonce_arr: [u8; 24] = random24()?;
         let yubi_required = yubi_slot.is_some();
         let slot = yubi_slot.unwrap_or(0);
         let mut yubi_challenge = [0u8; 32];
-        let yubi_resp: Option<Vec<u8>> = if yubi_required {
+        let yubi_resp: Option<Zeroizing<Vec<u8>>> = if yubi_required {
             getrandom::getrandom(&mut yubi_challenge)
                 .map_err(|_| LurpaxError::RandomUnavailable)?;
-            let y = yubi
-                .ok_or_else(|| LurpaxError::YubiKey("internal: missing yubi port".into()))?;
+            let y =
+                yubi.ok_or_else(|| LurpaxError::YubiKey("internal: missing yubi port".into()))?;
             let r = y.otp_calculate(slot, &yubi_challenge)?;
-            Some(r.to_vec())
+            Some(Zeroizing::new(r.to_vec()))
         } else {
             None
         };
-        let yubi_slice = yubi_resp.as_deref();
+        let yubi_slice = yubi_resp.as_ref().map(|b| b.as_slice());
         let (mem, it, par) = Header::default_argon2_params();
         let mut header = Header {
             version: HEADER_VERSION_V1,
@@ -290,11 +288,11 @@ impl VaultService {
         header.key_commitment = commitment_hmac(&commit_key, &header.base_nonce)?;
         commit_key.zeroize();
         let header_body = header.to_bytes();
-        check_interrupted(&term)?;
+        check_interrupted(term.as_ref())?;
         let enc_shards = encrypt_all_chunks(&header, &header_body, &compressed, &enc_key)?;
         enc_key.zeroize();
         let plain_shards: Vec<Vec<u8>> = enc_shards.into_iter().map(|z| (*z).clone()).collect();
-        check_interrupted(&term)?;
+        check_interrupted(term.as_ref())?;
         let disk_shards = layout_shards_with_rs(plain_shards, &header)?;
         let crc = crate::recovery::checksum::build_checksum_table(&disk_shards);
         write_atomic(output, &header, &header_body, &disk_shards, &crc)?;
@@ -304,7 +302,9 @@ impl VaultService {
     /// Opens a vault into `out_dir`.
     ///
     /// Canonical flow: CRC precheck → RS repair → key derivation → AEAD decrypt
-    /// with fallback pass (CRC false-negative handling).
+    /// with fallback pass (CRC false-negative handling). If any shard bytes were
+    /// repaired, the vault file at `vault_path` is atomically rewritten after a
+    /// successful extract so the on-disk copy matches the recovered ciphertext.
     pub fn open(
         vault_path: &Path,
         out_dir: &Path,
@@ -313,13 +313,16 @@ impl VaultService {
         limits: ArchiveLimits,
         term: Option<Arc<AtomicBool>>,
     ) -> Result<usize> {
+        let extracted_dest = out_dir.join("extracted");
+        if extracted_dest.exists() {
+            return Err(LurpaxError::OutputExists);
+        }
         let mut file = File::open(vault_path)?;
         let (header, header_body) = container::read_header_any(&mut file)?;
         let layout = container::read_payload(&mut file, &header, header_body.clone())?;
-        let total = header::total_shards(&header)? as usize;
-        let crc_expected = total
-            .checked_mul(4)
-            .ok_or(LurpaxError::Overflow)?;
+        let total =
+            usize::try_from(header::total_shards(&header)?).map_err(|_| LurpaxError::Overflow)?;
+        let crc_expected = total.checked_mul(4).ok_or(LurpaxError::Overflow)?;
         let mut shards = layout.shards;
 
         // CRC precheck: mark mismatched shards as damaged.
@@ -333,19 +336,18 @@ impl VaultService {
 
         // RS repair pass 1: fix CRC-detected damage.
         let mut repaired = repair_all_groups(&mut shards, &header, &damaged)?;
-        check_interrupted(&term)?;
+        check_interrupted(term.as_ref())?;
 
         // Key derivation (after RS, before AEAD).
-        let yubi_bytes: Option<Vec<u8>> = if header.yubi_required {
-            let y = yubi.ok_or_else(|| {
-                LurpaxError::YubiKey("YubiKey required for this vault".into())
-            })?;
+        let yubi_bytes: Option<Zeroizing<Vec<u8>>> = if header.yubi_required {
+            let y =
+                yubi.ok_or_else(|| LurpaxError::YubiKey("YubiKey required for this vault".into()))?;
             let r = y.otp_calculate(header.yubi_slot, &header.yubi_challenge)?;
-            Some(r.to_vec())
+            Some(Zeroizing::new(r.to_vec()))
         } else {
             None
         };
-        let yubi_slice = yubi_bytes.as_deref();
+        let yubi_slice = yubi_bytes.as_ref().map(|b| b.as_slice());
         let (mut enc_key, mut commit_key) =
             derive_keys_from_password(&header, password, yubi_slice)?;
         // AUDIT: key commitment verified before any AEAD decryption for fast wrong-password rejection.
@@ -355,19 +357,13 @@ impl VaultService {
         // Per-chunk AEAD decryption with fallback pass for CRC false negatives.
         // AUDIT: one logical data-shard view; refresh only the RS group touched on AEAD retry
         // (avoids O(n²) reclones from calling collect_data_shards every chunk — required at 100GB+).
-        let n = header.chunk_count as usize;
+        let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
         let mut data_shards = collect_data_shards(&shards, &header)?;
-        let mut plain = Vec::new();
+        let mut plain: Zeroizing<Vec<u8>> = Zeroizing::new(Vec::new());
         for chunk_idx in 0..n {
-            check_interrupted(&term)?;
+            check_interrupted(term.as_ref())?;
             let shard_data = data_shards[chunk_idx].as_slice();
-            match decrypt_single_chunk(
-                &header,
-                &header_body,
-                shard_data,
-                chunk_idx,
-                &enc_key,
-            ) {
+            match decrypt_single_chunk(&header, &header_body, shard_data, chunk_idx, &enc_key) {
                 Ok(pt) => plain.extend_from_slice(&pt),
                 Err(LurpaxError::DecryptAuthFailed) => {
                     // AUDIT: AEAD failure on CRC-clean shard = CRC false negative.
@@ -377,8 +373,7 @@ impl VaultService {
                     let (gstart, gdata, gparity) = shard_group_range(shard_idx, &header)?;
                     let group_len = gdata + gparity;
                     let gdam = &damaged[gstart..gstart + group_len];
-                    let mut gshards: Vec<Vec<u8>> =
-                        shards[gstart..gstart + group_len].to_vec();
+                    let mut gshards: Vec<Vec<u8>> = shards[gstart..gstart + group_len].to_vec();
                     repair_group(&mut gshards, gdata, gparity, gdam)?;
                     for i in 0..group_len {
                         if damaged[gstart + i] {
@@ -411,10 +406,16 @@ impl VaultService {
             return Err(LurpaxError::DecryptAuthFailed);
         }
 
-        check_interrupted(&term)?;
+        check_interrupted(term.as_ref())?;
         // AUDIT: streaming zstd → tar avoids buffering the entire decompressed payload.
-        let zstd_reader = zstd_streaming_reader(&plain)?;
-        extract_tar(zstd_reader, out_dir, &limits)?;
+        let zstd_reader = zstd_streaming_reader(plain.as_slice())?;
+        extract_tar(zstd_reader, out_dir, &limits, term.as_ref())?;
+        if repaired > 0 {
+            drop(file);
+            check_interrupted(term.as_ref())?;
+            let crc = crate::recovery::checksum::build_checksum_table(&shards);
+            write_atomic(vault_path, &header, &header_body, &shards, &crc)?;
+        }
         Ok(repaired)
     }
 
@@ -443,10 +444,9 @@ impl VaultService {
         file.seek(SeekFrom::Start(0))?;
         let _ = container::read_header_any(&mut file)?;
         let layout = container::read_payload(&mut file, &header, body)?;
-        let ts = header::total_shards(&header)? as usize;
-        let crc_len = ts
-            .checked_mul(4)
-            .ok_or(LurpaxError::Overflow)?;
+        let ts =
+            usize::try_from(header::total_shards(&header)?).map_err(|_| LurpaxError::Overflow)?;
+        let crc_len = ts.checked_mul(4).ok_or(LurpaxError::Overflow)?;
         if !layout.crc_table_valid || layout.crc_table.len() != crc_len {
             return Ok(VerifyHealth::Unreadable);
         }
@@ -459,7 +459,7 @@ impl VaultService {
         }
         let d = header.rs_data_shards_per_group as usize;
         let p = header.rs_parity_shards_per_group as usize;
-        let n = header.chunk_count as usize;
+        let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
         let mut pos = 0usize;
         let mut idx = 0usize;
         while idx < n {
@@ -474,5 +474,64 @@ impl VaultService {
             idx += k;
         }
         Ok(VerifyHealth::Repairable)
+    }
+}
+
+#[cfg(test)]
+mod shard_layout_tests {
+    use proptest::prelude::*;
+
+    use super::{chunk_to_shard_index, collect_data_shards, shard_group_range, Header};
+    use crate::constants::{
+        CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, KDF_ARGON2ID, RS_DATA_SHARDS_PER_GROUP,
+        RS_PARITY_SHARDS_PER_GROUP,
+    };
+
+    fn minimal_header(chunk_count: u64) -> Header {
+        let full = u64::from(CHUNK_PLAINTEXT_SIZE);
+        let compressed_payload_size = if chunk_count == 1 {
+            1u64
+        } else {
+            full.saturating_mul(chunk_count - 1).saturating_add(1)
+        };
+        Header {
+            version: HEADER_VERSION_V1,
+            kdf_algorithm: KDF_ARGON2ID,
+            argon2_mem_kib: crate::constants::DEFAULT_ARGON2_MEM_KIB,
+            argon2_iterations: crate::constants::DEFAULT_ARGON2_ITERATIONS,
+            argon2_parallelism: crate::constants::DEFAULT_ARGON2_PARALLELISM,
+            salt: [0u8; 32],
+            base_nonce: [0u8; 24],
+            key_commitment: [0u8; 32],
+            chunk_plaintext_size: CHUNK_PLAINTEXT_SIZE,
+            chunk_count,
+            compressed_payload_size,
+            rs_data_shards_per_group: RS_DATA_SHARDS_PER_GROUP,
+            rs_parity_shards_per_group: RS_PARITY_SHARDS_PER_GROUP,
+            yubi_required: false,
+            yubi_slot: 0,
+            yubi_challenge: [0u8; 32],
+        }
+    }
+
+    proptest! {
+        #[test]
+        fn shard_index_helpers_agree(chunk_count in 1u64..=512u64) {
+            let h = minimal_header(chunk_count);
+            h.validate_schema().map_err(|_| TestCaseError::reject("invalid header"))?;
+            let ts = crate::vault::header::total_shards(&h).map_err(|_| TestCaseError::reject("total_shards"))?;
+            let ts = usize::try_from(ts).map_err(|_| TestCaseError::reject("usize"))?;
+            let shards: Vec<Vec<u8>> = (0..ts).map(|i| vec![i as u8; 1]).collect();
+            let data = collect_data_shards(&shards, &h).map_err(|e| TestCaseError::fail(format!("{e:?}")))?;
+            let n = usize::try_from(h.chunk_count).unwrap();
+            prop_assert_eq!(data.len(), n);
+            for (i, chunk) in data.iter().enumerate() {
+                let flat = chunk_to_shard_index(i, &h);
+                prop_assert_eq!(chunk.as_slice(), shards[flat].as_slice());
+                let (gstart, gdata, gparity) = shard_group_range(flat, &h).map_err(|e| TestCaseError::fail(format!("{e:?}")))?;
+                prop_assert!(flat >= gstart && flat < gstart + gdata + gparity);
+                prop_assert!(flat < gstart + gdata);
+            }
+        }
     }
 }

@@ -3,12 +3,12 @@
 //! Full 100GB-class runs are not executed in CI; these tests validate layout and
 //! logic with raised limits. For production scale, also run manual soak tests.
 
-use std::fs;
-use std::io::Write;
 use lurpax::archive::ArchiveLimits;
 use lurpax::errors::VerifyHealth;
 use lurpax::vault::header::{shard_cipher_size, total_shards};
 use lurpax::vault::{Header, VaultService};
+use std::fs;
+use std::io::Write;
 
 fn limits_for_scale() -> ArchiveLimits {
     ArchiveLimits {
@@ -47,7 +47,15 @@ fn e2e_many_files_roundtrip() {
 
     assert_eq!(VaultService::verify(&vault).unwrap(), VerifyHealth::Healthy);
 
-    VaultService::open(&vault, &out, b"e2e-many-files", None, limits_for_scale(), None).unwrap();
+    VaultService::open(
+        &vault,
+        &out,
+        b"e2e-many-files",
+        None,
+        limits_for_scale(),
+        None,
+    )
+    .unwrap();
 
     let extracted = out.join("extracted");
     for i in 0..n {

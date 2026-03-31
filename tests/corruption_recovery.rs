@@ -39,8 +39,7 @@ fn single_shard_corruption_recovers() {
     let tmp = tempfile::tempdir().unwrap();
     let (vault_path, input_dir) = create_test_vault(tmp.path());
 
-    let original_content =
-        fs::read_to_string(input_dir.join("data.txt")).unwrap();
+    let original_content = fs::read_to_string(input_dir.join("data.txt")).unwrap();
 
     let mut vault = fs::read(&vault_path).unwrap();
     let header_len = read_header_len(&vault) as usize;
@@ -109,5 +108,8 @@ fn checksum_table_corrupt_open_fallback() {
         ArchiveLimits::default(),
         None,
     );
-    assert!(result.is_ok(), "open should succeed via CRC-triggered RS repair: {result:?}");
+    assert!(
+        result.is_ok(),
+        "open should succeed via CRC-triggered RS repair: {result:?}"
+    );
 }

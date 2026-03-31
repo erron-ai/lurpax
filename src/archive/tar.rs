@@ -2,14 +2,16 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 
 use tar::Archive;
 
 use crate::constants::{
-    DEFAULT_MAX_DECOMPRESSED_BYTES, DEFAULT_MAX_FILE_SIZE, DEFAULT_MAX_FILES,
+    DEFAULT_MAX_DECOMPRESSED_BYTES, DEFAULT_MAX_FILES, DEFAULT_MAX_FILE_SIZE,
     DEFAULT_MAX_INPUT_BYTES,
 };
-use crate::errors::{LurpaxError, Result};
+use crate::errors::{check_interrupted, LurpaxError, Result};
 
 /// Limits for `create` (source tree) and `open` (extracted output).
 #[derive(Debug, Clone)]
@@ -80,7 +82,14 @@ pub fn tar_input(input: &Path, limits: &ArchiveLimits) -> Result<Vec<u8>> {
             let mut f = File::open(input)?;
             builder.append_file(name, &mut f)?;
         } else if input.is_dir() {
-            walk_append_dir(&mut builder, input, input, limits, &mut acc_files, &mut acc_bytes)?;
+            walk_append_dir(
+                &mut builder,
+                input,
+                input,
+                limits,
+                &mut acc_files,
+                &mut acc_bytes,
+            )?;
         } else {
             return Err(LurpaxError::UnsafeArchive(
                 "only files and directories supported".into(),
@@ -106,9 +115,9 @@ fn walk_append_dir(
         if ft.is_symlink() {
             return Err(LurpaxError::UnsafeArchive("symlink in source tree".into()));
         }
-        let rel = p.strip_prefix(root).map_err(|_| LurpaxError::UnsafeArchive(
-            "strip prefix".into(),
-        ))?;
+        let rel = p
+            .strip_prefix(root)
+            .map_err(|_| LurpaxError::UnsafeArchive("strip prefix".into()))?;
         let rel_s = rel.to_string_lossy();
         if ft.is_dir() {
             builder.append_dir(rel_s.as_ref(), &p)?;
@@ -142,7 +151,12 @@ fn walk_append_dir(
 /// Extraction proceeds into a unique temp directory. On success the temp dir is
 /// atomically renamed to `<dest_dir>/extracted`. On any failure the temp dir is
 /// cleaned up to prevent partial attacker-controlled content on disk.
-pub fn extract_tar(data: impl std::io::Read, dest_dir: &Path, limits: &ArchiveLimits) -> Result<()> {
+pub fn extract_tar(
+    data: impl std::io::Read,
+    dest_dir: &Path,
+    limits: &ArchiveLimits,
+    term: Option<&Arc<AtomicBool>>,
+) -> Result<()> {
     fs::create_dir_all(dest_dir)?;
     let base = fs::canonicalize(dest_dir)?;
     let tmp_name = format!(".lurpax-extracting-{}", random_hex_8()?);
@@ -156,14 +170,14 @@ pub fn extract_tar(data: impl std::io::Read, dest_dir: &Path, limits: &ArchiveLi
     fs::create_dir(&tmp)?;
     // AUDIT: all extraction targets live under `tmp`; we verify path containment
     // and set safe permissions (0600 files, 0700 dirs) to prevent suid/sgid restore.
-    let res = extract_into_dir(data, &tmp, &base, limits);
+    let res = extract_into_dir(data, &tmp, &base, limits, term);
     if res.is_err() {
         let _ = fs::remove_dir_all(&tmp);
         return res;
     }
     if let Err(e) = normalize_permissions_recursive(&tmp) {
         let _ = fs::remove_dir_all(&tmp);
-        return Err(e.into());
+        return Err(e);
     }
     // Atomic rename of the entire temp dir to final destination.
     let final_dest = base.join("extracted");
@@ -186,16 +200,16 @@ fn extract_into_dir(
     tmp: &Path,
     _base: &Path,
     limits: &ArchiveLimits,
+    term: Option<&Arc<AtomicBool>>,
 ) -> Result<()> {
     let mut archive = Archive::new(data);
     let mut written: u64 = 0;
     let mut files: u64 = 0;
     for entry in archive.entries()? {
+        check_interrupted(term)?;
         let mut entry = entry?;
         // AUDIT: strict allowlist — only regular files and directories accepted
-        if !entry.header().entry_type().is_file()
-            && !entry.header().entry_type().is_dir()
-        {
+        if !entry.header().entry_type().is_file() && !entry.header().entry_type().is_dir() {
             return Err(LurpaxError::UnsafeArchive("unsupported entry type".into()));
         }
         let path = entry.path()?;
@@ -216,9 +230,7 @@ fn extract_into_dir(
         if size > limits.max_file_size {
             return Err(LurpaxError::LimitExceeded("entry too large".into()));
         }
-        written = written
-            .checked_add(size)
-            .ok_or(LurpaxError::Overflow)?;
+        written = written.checked_add(size).ok_or(LurpaxError::Overflow)?;
         if written > limits.max_output_bytes {
             return Err(LurpaxError::LimitExceeded("decompressed too large".into()));
         }

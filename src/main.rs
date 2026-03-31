@@ -5,10 +5,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use clap::Parser;
-#[cfg(unix)]
-use libc::{rlimit, setrlimit, RLIMIT_CORE, RLIM_INFINITY};
 #[cfg(target_os = "linux")]
 use libc::c_int;
+#[cfg(unix)]
+use libc::{rlimit, setrlimit, RLIMIT_CORE, RLIM_INFINITY};
 use lurpax::cli::{run, Cli};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::flag;

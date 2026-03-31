@@ -1,5 +1,5 @@
-use lurpax::crypto::kdf::{argon2_derive_master, compose_ikm, derive_subkeys};
 use lurpax::constants::ARGON2_OUTPUT_LEN;
+use lurpax::crypto::kdf::{argon2_derive_master, compose_ikm, derive_subkeys};
 
 #[test]
 fn compose_ikm_length_prefix() {

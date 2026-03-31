@@ -41,7 +41,16 @@ fn verify_healthy_vault() {
     let src = dir.path().join("a");
     std::fs::write(&src, b"x").unwrap();
     let vault = dir.path().join("v.lurpax");
-    VaultService::create(&vault, &src, b"p", None, None, ArchiveLimits::default(), None).unwrap();
+    VaultService::create(
+        &vault,
+        &src,
+        b"p",
+        None,
+        None,
+        ArchiveLimits::default(),
+        None,
+    )
+    .unwrap();
     let h = VaultService::verify(&vault).unwrap();
     assert_eq!(h, VerifyHealth::Healthy);
 }
@@ -54,7 +63,16 @@ fn open_wrong_password_fails() {
     let vault = dir.path().join("v.lurpax");
     let out = dir.path().join("out");
     std::fs::create_dir(&out).unwrap();
-    VaultService::create(&vault, &src, b"good", None, None, ArchiveLimits::default(), None).unwrap();
+    VaultService::create(
+        &vault,
+        &src,
+        b"good",
+        None,
+        None,
+        ArchiveLimits::default(),
+        None,
+    )
+    .unwrap();
     let r = VaultService::open(&vault, &out, b"bad", None, ArchiveLimits::default(), None);
     assert!(r.is_err());
 }

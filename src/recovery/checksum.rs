@@ -15,10 +15,7 @@ pub fn build_checksum_table(shards: &[Vec<u8>]) -> Vec<u8> {
 
 /// Returns `Ok(true)` if table matches shards, `Ok(false)` if table length/format wrong.
 pub fn verify_checksum_table(shards: &[Vec<u8>], table: &[u8]) -> Result<bool> {
-    let expected = shards
-        .len()
-        .checked_mul(4)
-        .ok_or(LurpaxError::Overflow)?;
+    let expected = shards.len().checked_mul(4).ok_or(LurpaxError::Overflow)?;
     if table.len() != expected {
         return Ok(false);
     }
@@ -39,10 +36,7 @@ pub fn verify_checksum_table(shards: &[Vec<u8>], table: &[u8]) -> Result<bool> {
 
 /// Marks shards whose CRC does not match the table; if table short, returns `Err` for verify path.
 pub fn damaged_from_table(shards: &[Vec<u8>], table: &[u8]) -> Result<Vec<bool>> {
-    let expected = shards
-        .len()
-        .checked_mul(4)
-        .ok_or(LurpaxError::Overflow)?;
+    let expected = shards.len().checked_mul(4).ok_or(LurpaxError::Overflow)?;
     if table.len() != expected {
         return Err(LurpaxError::StructurallyUnreadable);
     }

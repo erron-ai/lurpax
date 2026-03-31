@@ -15,6 +15,8 @@ lurpax open --vault backup.lurpax --out-dir ./restored
 lurpax verify --vault backup.lurpax
 ```
 
+If `open` applies Reed–Solomon repair, the vault file is rewritten in place after extraction succeeds (same path; atomic replace).
+
 Optional YubiKey (slot 1 or 2):
 
 ```bash

@@ -28,12 +28,7 @@ fn header_aad(header_len: u32, header_body: &[u8]) -> Vec<u8> {
     a
 }
 
-fn chunk_aad(
-    header_len: u32,
-    header_body: &[u8],
-    chunk_index: u64,
-    is_final: bool,
-) -> Vec<u8> {
+fn chunk_aad(header_len: u32, header_body: &[u8], chunk_index: u64, is_final: bool) -> Vec<u8> {
     // AUDIT: chunk_index in AAD prevents reordering; is_final prevents truncation
     let mut v = header_aad(header_len, header_body);
     v.extend_from_slice(&chunk_index.to_le_bytes());
@@ -50,7 +45,7 @@ pub fn encrypt_all_chunks(
 ) -> Result<Vec<Zeroizing<Vec<u8>>>> {
     let chunk_plain =
         usize::try_from(header.chunk_plaintext_size).map_err(|_| LurpaxError::Overflow)?;
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let total = compressed.len();
     let expected_total =
         usize::try_from(header.compressed_payload_size).map_err(|_| LurpaxError::Overflow)?;
@@ -62,9 +57,7 @@ pub fn encrypt_all_chunks(
     let header_len = u32::try_from(header_body.len()).map_err(|_| LurpaxError::Overflow)?;
     let mut out = Vec::with_capacity(n);
     for i in 0..n {
-        let start = i
-            .checked_mul(chunk_plain)
-            .ok_or(LurpaxError::Overflow)?;
+        let start = i.checked_mul(chunk_plain).ok_or(LurpaxError::Overflow)?;
         let end = if i + 1 == n {
             total
         } else {
@@ -89,9 +82,7 @@ pub fn encrypt_all_chunks(
                 },
             )
             .map_err(|_| LurpaxError::Crypto("aead encrypt".into()))?;
-        let shard_sz = chunk_plain
-            .checked_add(16)
-            .ok_or(LurpaxError::Overflow)?;
+        let shard_sz = chunk_plain.checked_add(16).ok_or(LurpaxError::Overflow)?;
         if ct.len() > shard_sz {
             return Err(LurpaxError::Crypto("ciphertext too long".into()));
         }
@@ -110,7 +101,7 @@ pub fn decrypt_single_chunk(
     chunk_index: usize,
     enc_key: &[u8; 32],
 ) -> Result<Vec<u8>> {
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let chunk_plain =
         usize::try_from(header.chunk_plaintext_size).map_err(|_| LurpaxError::Overflow)?;
     let cipher = XChaCha20Poly1305::new(Key::from_slice(enc_key));
@@ -121,17 +112,13 @@ pub fn decrypt_single_chunk(
     let aad = chunk_aad(header_len, header_body, chunk_index as u64, is_final);
     let ct_len = if is_final {
         let last_pt = crate::vault::header::last_chunk_plaintext_size(header)?;
-        let last_ct = last_pt
-            .checked_add(16)
-            .ok_or(LurpaxError::Overflow)? as usize;
+        let last_ct = last_pt.checked_add(16).ok_or(LurpaxError::Overflow)? as usize;
         if last_ct > shard.len() {
             return Err(LurpaxError::DecryptAuthFailed);
         }
         last_ct
     } else {
-        chunk_plain
-            .checked_add(16)
-            .ok_or(LurpaxError::Overflow)?
+        chunk_plain.checked_add(16).ok_or(LurpaxError::Overflow)?
     };
     let ct = &shard[..ct_len];
     cipher
@@ -152,7 +139,7 @@ pub fn decrypt_all_chunks(
     shards: &[Zeroizing<Vec<u8>>],
     enc_key: &[u8; 32],
 ) -> Result<Zeroizing<Vec<u8>>> {
-    let n = header.chunk_count as usize;
+    let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     if shards.len() != n {
         return Err(LurpaxError::InvalidVault("shard count".into()));
     }

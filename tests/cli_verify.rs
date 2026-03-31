@@ -8,7 +8,16 @@ fn create_vault(dir: &std::path::Path) -> std::path::PathBuf {
     let src = dir.join("data.txt");
     std::fs::write(&src, b"verify-test-payload").unwrap();
     let vault = dir.join("v.lurpax");
-    VaultService::create(&vault, &src, b"pw", None, None, ArchiveLimits::default(), None).unwrap();
+    VaultService::create(
+        &vault,
+        &src,
+        b"pw",
+        None,
+        None,
+        ArchiveLimits::default(),
+        None,
+    )
+    .unwrap();
     vault
 }
 

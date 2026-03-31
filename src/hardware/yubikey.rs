@@ -6,9 +6,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::constants::{
-    ENV_YKMAN_PATH, YKMAN_CANDIDATE_PATHS, YUBI_RESPONSE_HEX_LEN,
-};
+use crate::constants::{ENV_YKMAN_PATH, YKMAN_CANDIDATE_PATHS, YUBI_RESPONSE_HEX_LEN};
 use crate::errors::{LurpaxError, Result};
 
 /// Computes the 20-byte YubiKey response for a stored challenge.
@@ -34,7 +32,9 @@ fn validate_ykman_path(path: &Path) -> Result<()> {
     }
     let mode = meta.mode();
     if is_world_writable(mode) {
-        return Err(LurpaxError::YubiKey("ykman must not be world-writable".into()));
+        return Err(LurpaxError::YubiKey(
+            "ykman must not be world-writable".into(),
+        ));
     }
     #[cfg(unix)]
     {
@@ -138,8 +138,10 @@ impl YubiKeyPort for RealYubiKey {
             if i >= 20 {
                 break;
             }
-            let s = std::str::from_utf8(chunk).map_err(|_| LurpaxError::YubiKey("hex utf8".into()))?;
-            outb[i] = u8::from_str_radix(s, 16).map_err(|_| LurpaxError::YubiKey("hex parse".into()))?;
+            let s =
+                std::str::from_utf8(chunk).map_err(|_| LurpaxError::YubiKey("hex utf8".into()))?;
+            outb[i] =
+                u8::from_str_radix(s, 16).map_err(|_| LurpaxError::YubiKey("hex parse".into()))?;
         }
         Ok(outb)
     }

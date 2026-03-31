@@ -5,7 +5,16 @@ fn create_vault(dir: &std::path::Path) -> std::path::PathBuf {
     let src = dir.join("data.txt");
     std::fs::write(&src, b"format-test").unwrap();
     let vault = dir.join("v.lurpax");
-    VaultService::create(&vault, &src, b"pw", None, None, ArchiveLimits::default(), None).unwrap();
+    VaultService::create(
+        &vault,
+        &src,
+        b"pw",
+        None,
+        None,
+        ArchiveLimits::default(),
+        None,
+    )
+    .unwrap();
     vault
 }
 
@@ -52,5 +61,8 @@ fn header_body_length_stored() {
     let data = std::fs::read(&vault).unwrap();
     let len = u32::from_le_bytes(data[5..9].try_into().unwrap());
     assert!(len > 0, "header body length must be positive");
-    assert!(len < 4096, "header body length must be under MAX_HEADER_BODY_LEN");
+    assert!(
+        len < 4096,
+        "header body length must be under MAX_HEADER_BODY_LEN"
+    );
 }

@@ -87,9 +87,7 @@ fn read_password_file(path: &std::path::Path) -> Result<Zeroizing<Vec<u8>>> {
     }
     let raw = fs::read(path)?;
     if raw.is_empty() {
-        return Err(LurpaxError::Password(
-            "password must not be empty".into(),
-        ));
+        return Err(LurpaxError::Password("password must not be empty".into()));
     }
     let mut s = raw;
     if s.ends_with(b"\r\n") {
@@ -116,7 +114,8 @@ fn read_password_interactive(confirm: bool) -> Result<Zeroizing<Vec<u8>>> {
         if confirm {
             let p2 = rpassword::prompt_password("Confirm password: ")
                 .map_err(|e| LurpaxError::Password(format!("tty: {e}")))?;
-            if p2.into_bytes() != bytes {
+            let p2_bytes = Zeroizing::new(p2.into_bytes());
+            if *p2_bytes != bytes {
                 eprintln!("passwords do not match");
                 continue;
             }
@@ -231,7 +230,7 @@ fn run_inner(cli: Cli, term: Arc<AtomicBool>) -> Result<RunOutcome> {
             )?;
             if repaired > 0 {
                 eprintln!(
-                    "warning: repaired approximately {repaired} bytes in corrupted shards"
+                    "warning: repaired approximately {repaired} bytes; vault file updated on disk"
                 );
             }
             Ok(RunOutcome::Success)
@@ -244,7 +243,9 @@ fn run_inner(cli: Cli, term: Arc<AtomicBool>) -> Result<RunOutcome> {
                     println!("✓ vault OK — no corruption detected");
                 }
                 VerifyHealth::Repairable => {
-                    println!("⚠ vault damaged but repairable by Reed–Solomon when opened");
+                    println!(
+                        "⚠ vault damaged; a successful open will repair shards and rewrite the file"
+                    );
                 }
                 VerifyHealth::Unrecoverable => {
                     println!("✗ vault has damage beyond RS capacity in at least one group");

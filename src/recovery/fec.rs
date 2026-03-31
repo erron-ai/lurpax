@@ -43,13 +43,7 @@ pub fn repair_group(
     let mut opts: Vec<Option<Vec<u8>>> = shards
         .iter()
         .zip(damaged.iter())
-        .map(|(s, bad)| {
-            if *bad {
-                None
-            } else {
-                Some(s.clone())
-            }
-        })
+        .map(|(s, bad)| if *bad { None } else { Some(s.clone()) })
         .collect();
     rs.reconstruct(&mut opts)
         .map_err(|e| LurpaxError::UnrecoverableDamage(format!("reed-solomon reconstruct: {e}")))?;
