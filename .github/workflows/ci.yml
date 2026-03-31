@@ -13,72 +13,41 @@ permissions:
   contents: read
 
 jobs:
-  fmt:
-    runs-on: macos-latest
+  # One compile path: fmt, clippy, test, doc, and supply-chain checks share rust-cache.
+  rust:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
-          components: rustfmt
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: rust
       - run: cargo metadata --locked --format-version 1 > /dev/null
       - run: cargo fmt --all -- --check
-
-  clippy:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88.0
-        with:
-          components: clippy
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
-
-  test:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88.0
       - run: cargo test --locked --workspace
-
-  doc:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88.0
       - run: RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
-
-  deny:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      # cargo-deny 0.19+ needs Rust >= 1.88; pulls CVSS-4.0-aware rustsec like cargo-audit 0.22.
-      - uses: dtolnay/rust-toolchain@1.88.0
-      # Avoid EmbarkStudios/cargo-deny-action: Docker actions do not run on macOS runners.
-      - run: cargo install cargo-deny --version 0.19.0 --locked
-      - run: $HOME/.cargo/bin/cargo-deny --locked --all-features check
-
-  audit:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88.0
-      # 0.22+ parses CVSS 4.0 in RustSec DB; --force avoids a stale binary shadowing ~/.cargo/bin.
-      - run: cargo install cargo-audit --version 0.22.1 --locked --force
-      - run: $HOME/.cargo/bin/cargo-audit audit
-
-  msrv:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.88.0
-      - run: cargo check --locked --workspace
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deny@0.19.0
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit@0.22.1
+      - run: cargo deny --locked --all-features check
+      - run: cargo audit
 
   coverage:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: coverage
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
