@@ -284,4 +284,4 @@ See [SECURITY.md](SECURITY.md) for the full threat model and limitations.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for the full text.
+MIT
