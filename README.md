@@ -53,4 +53,4 @@ Built by [Erron.ai](https://erron.ai).
 
 ## License
 
-MIT OR Apache-2.0
+MIT
