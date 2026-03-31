@@ -4,7 +4,7 @@
 # Optional: REPO=owner/name ./scripts/print-release-sha256s.sh v0.1.0
 set -euo pipefail
 
-REPO="${REPO:-erronai/lurpax}"
+REPO="${REPO:-erron-ai/lurpax}"
 TAG="${1:?usage: $0 v0.1.0}"
 
 targets=(

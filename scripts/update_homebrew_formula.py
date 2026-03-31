@@ -31,7 +31,7 @@ def main() -> None:
     parser.add_argument(
         "--github-slug",
         default="",
-        help="owner/name — replaces github.com/erronai/lurpax in url strings when set.",
+        help="owner/name — replaces github.com/erron-ai/lurpax in url strings when set.",
     )
     args = parser.parse_args()
     if len(args.shas) != 4:
@@ -76,7 +76,7 @@ def main() -> None:
 
     if args.github_slug:
         text = text.replace(
-            "github.com/erronai/lurpax",
+            "github.com/erron-ai/lurpax",
             f"github.com/{args.github_slug}",
         )
 

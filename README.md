@@ -25,26 +25,26 @@ brew install lurpax
 Or, if the formula is not yet in Homebrew core:
 
 ```bash
-brew install erronai/tap/lurpax
+brew install erron-ai/tap/lurpax
 ```
 
 ### Shell installer
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/erronai/lurpax/main/install.sh | bash
+curl -sSf https://raw.githubusercontent.com/erron-ai/lurpax/main/install.sh | bash
 ```
 
 Or install a specific version:
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/erronai/lurpax/main/install.sh | bash -s v0.1.0
+curl -sSf https://raw.githubusercontent.com/erron-ai/lurpax/main/install.sh | bash -s v0.1.0
 ```
 
 Set `LURPAX_INSTALL_DIR` to change the install location (default: `/usr/local/bin`).
 
 ### Pre-built binaries
 
-Download the latest release for your platform from [GitHub Releases](https://github.com/erronai/lurpax/releases), extract, and move `lurpax` to somewhere on your `PATH`:
+Download the latest release for your platform from [GitHub Releases](https://github.com/erron-ai/lurpax/releases), extract, and move `lurpax` to somewhere on your `PATH`:
 
 ```bash
 tar xzf lurpax-v0.1.0-aarch64-apple-darwin.tar.gz

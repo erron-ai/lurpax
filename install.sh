@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="erronai/lurpax"
+REPO="${LURPAX_REPO:-erron-ai/lurpax}"
 INSTALL_DIR="${LURPAX_INSTALL_DIR:-/usr/local/bin}"
 
 info()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
@@ -28,10 +28,24 @@ detect_target() {
 }
 
 get_latest_tag() {
-    local tag
-    tag="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-        | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
-    [ -n "$tag" ] || err "could not determine latest release"
+    local response http_code body tag
+    response="$(
+        curl -sS -w $'\n%{http_code}' \
+            "https://api.github.com/repos/${REPO}/releases/latest"
+    )" || err "failed to contact GitHub (network or TLS error). Try again or install from source (see README)."
+    http_code="${response##*$'\n'}"
+    body="${response%$'\n'${http_code}}"
+    case "$http_code" in
+        200) ;;
+        404)
+            err "no GitHub release for ${REPO}: repo missing/private/unpublished, or no releases yet. Tag v* and run the release workflow, set LURPAX_REPO=owner/repo for a fork, or use: cargo build --release"
+            ;;
+        *)
+            err "GitHub API HTTP ${http_code} for ${REPO}/releases/latest"
+            ;;
+    esac
+    tag="$(printf '%s\n' "$body" | grep '"tag_name"' | head -1 | cut -d'"' -f4)"
+    [ -n "$tag" ] || err "could not parse latest release tag from API response"
     echo "$tag"
 }
 
