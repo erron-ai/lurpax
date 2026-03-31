@@ -19,7 +19,7 @@ Built by [Erron.ai](https://erron.ai).
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install erronai/tap/lurpax
+brew install lurpax
 ```
 
 ### Shell installer
