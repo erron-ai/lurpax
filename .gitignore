@@ -2,6 +2,7 @@
 target/
 **/*.rs.bk
 .cargo/credentials.toml
+example/
 
 # Local env and secrets (never commit)
 .env
