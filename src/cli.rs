@@ -218,12 +218,13 @@ fn run_inner(cli: Cli, term: Arc<AtomicBool>) -> Result<RunOutcome> {
             max_files,
             max_file_size,
         } => {
-            if let Some(s) = yubikey_slot {
-                if s != 1 && s != 2 {
-                    return Err(crate::errors::LurpaxError::YubiKey(
-                        "--yubikey-slot must be 1 or 2".into(),
-                    ));
-                }
+            if let Some(s) = yubikey_slot
+                && s != 1
+                && s != 2
+            {
+                return Err(crate::errors::LurpaxError::YubiKey(
+                    "--yubikey-slot must be 1 or 2".into(),
+                ));
             }
             let pwd = resolve_password(password_file, true)?;
             let limits = mk_limits(max_input_size, max_files, max_file_size, None);
