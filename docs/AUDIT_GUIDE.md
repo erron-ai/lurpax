@@ -12,7 +12,7 @@ Line counts are `wc -l` on source as of the last doc refresh; use `wc -l src/**/
 | `src/cli.rs` | 252 | Argument surface, limits, YubiKey wiring |
 | `src/vault/container.rs` | 197 | On-disk layout, atomic write, payload read |
 | `src/crypto/stream.rs` | 168 | Per-chunk nonce, AAD, XChaCha20-Poly1305 |
-| `src/hardware/yubikey.rs` | 146 | `ykman` resolution and validation |
+| `src/hardware/yubikey.rs` | 164 | `ykman` resolution and validation |
 | `src/constants.rs` | 91 | Centralized numeric policy |
 | `src/errors/mod.rs` | 92 | Typed errors, verify health |
 | `src/crypto/kdf.rs` | 74 | Argon2id, HKDF, IKM composition |

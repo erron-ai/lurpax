@@ -95,7 +95,7 @@ lurpax create --output <path> --input <file-or-dir> [options]
 ```
 
 | Option | Description |
-|---|---|
+| --- | --- |
 | `--output` | Path for the new `.lurpax` file (must not already exist) |
 | `--input` | File or directory to archive |
 | `--password-file <path>` | Read password from a file instead of the terminal |
@@ -111,7 +111,7 @@ lurpax open --vault <path> --out-dir <dir> [options]
 ```
 
 | Option | Description |
-|---|---|
+| --- | --- |
 | `--vault` | Path to the `.lurpax` file |
 | `--out-dir` | Directory to extract contents into |
 | `--password-file <path>` | Read password from a file instead of the terminal |
@@ -130,11 +130,11 @@ lurpax verify --vault <path>
 Returns an exit code indicating vault health:
 
 | Exit code | Meaning |
-|---|---|
+| --- | --- |
 | 0 | Healthy — no corruption detected |
-| 1 | Damaged but repairable via Reed–Solomon |
-| 2 | Unrecoverable damage (exceeds RS parity capacity) |
-| 3 | Structurally unreadable |
+| 1 | Damaged but repairable — a successful `open` will repair and rewrite the vault |
+| 2 | Unrecoverable damage — RS parity capacity exceeded |
+| 3 | Structurally unreadable — header, tail, or checksum table unusable |
 
 ## Non-Interactive Password
 
@@ -149,38 +149,103 @@ The file must contain a single line with the password. Symlinks are rejected.
 
 ## YubiKey Setup
 
-Lurpax supports YubiKey as a second factor via HMAC-SHA1 challenge-response. The YubiKey response is mixed into key derivation alongside your password.
+Lurpax supports YubiKey as a second factor via HMAC-SHA1 challenge-response. When enabled, the YubiKey's response is mixed into key derivation alongside your password, so the vault cannot be opened without both the correct password **and** the physical key.
 
-**1. Install YubiKey Manager CLI:**
+> **Supported keys:** Any YubiKey that supports HMAC-SHA1 challenge-response (YubiKey 4, YubiKey 5 series, and later). Slot 1 and slot 2 are both accepted; slot 2 is recommended because slot 1 is pre-programmed with Yubico OTP on most keys out of the box.
+
+### Prerequisites
+
+**1. Install YubiKey Manager CLI (`ykman`):**
+
+| Platform | Command |
+| --- | --- |
+| macOS | `brew install ykman` |
+| Debian / Ubuntu | `sudo apt install yubikey-manager` |
+| Fedora / RHEL | `sudo dnf install yubikey-manager` |
+| pip (any OS) | `pip install yubikey-manager` |
+
+Verify the install:
 
 ```bash
-brew install ykman              # macOS
-sudo apt install yubikey-manager  # Debian / Ubuntu
+ykman --version
 ```
 
-**2. Program a slot for challenge-response:**
+**2. Connect your YubiKey and confirm it is detected:**
+
+```bash
+ykman list
+```
+
+You should see your key listed (e.g. `YubiKey 5 NFC [OTP+FIDO+CCID] Serial: 12345678`).
+
+### Configure a Slot for Challenge-Response
+
+**3. Program slot 2 for HMAC-SHA1 challenge-response:**
 
 ```bash
 ykman otp chalresp --touch --generate 2
 ```
 
-Use slot 2 unless slot 1 is free (slot 1 is often used by Yubico OTP).
+- `--touch` requires a physical touch each time a challenge is issued (recommended).
+- `--generate` creates a random 20-byte HMAC secret and writes it to the key.
+- Replace `2` with `1` only if slot 2 is already in use for something else.
 
-**3. Create a vault with YubiKey:**
+> **Warning:** This overwrites the current contents of that slot. Slot 1 ships pre-configured with Yubico OTP on most keys — use slot 2 to avoid erasing it.
+
+Confirm the slot was written correctly:
+
+```bash
+ykman otp info
+```
+
+Slot 2 should show `Challenge-response - HMAC-SHA1`.
+
+### Create and Open Vaults
+
+**4. Create a vault with YubiKey as a second factor:**
 
 ```bash
 lurpax create --output vault.lurpax --input ./data --yubikey-slot 2
 ```
 
-Touch the key when it blinks.
+You will be prompted for a password, then Lurpax issues a challenge to the key. Touch the key when it blinks. The slot number and challenge are stored in the vault header — you do not need to pass `--yubikey-slot` again when opening.
 
-**4. Open — just have the same YubiKey inserted:**
+**5. Open a vault — have the same YubiKey inserted:**
 
 ```bash
 lurpax open --vault vault.lurpax --out-dir ./restored
 ```
 
-`ykman` is found at `/usr/bin/ykman`, `/usr/local/bin/ykman`, or `/opt/homebrew/bin/ykman`. Override with the `LURPAX_YKMAN_PATH` environment variable.
+Lurpax reads the slot from the vault header automatically. Touch the key when it blinks.
+
+> **Keep your key safe.** If the YubiKey is lost or the slot is reprogrammed, the vault cannot be decrypted. There is no recovery path without both the correct password and the original key credential.
+
+### ykman Path Resolution
+
+Lurpax searches for `ykman` at the following locations in order:
+
+1. The path in the `LURPAX_YKMAN_PATH` environment variable (if set)
+2. `/usr/bin/ykman`
+3. `/usr/local/bin/ykman`
+4. `/opt/homebrew/bin/ykman`
+
+### If you see `ykman path must not be a symlink`
+
+Lurpax requires `ykman` to be a regular file, not a symbolic link. Homebrew installs `ykman` as a symlink from `bin/` into `Cellar/`, so the default search hits that link and fails.
+
+**Fix:** Resolve the symlink and point `LURPAX_YKMAN_PATH` at the real binary:
+
+```bash
+# Linux (GNU readlink)
+export LURPAX_YKMAN_PATH="$(readlink -f "$(which ykman)")"
+
+# macOS
+export LURPAX_YKMAN_PATH="$(realpath "$(which ykman)")"
+```
+
+To inspect the target manually: `ls -l "$(which ykman)"` — the resolved path often looks like `/opt/homebrew/Cellar/ykman/<version>/libexec/bin/ykman`.
+
+> After `brew upgrade ykman` the Cellar version directory changes — re-resolve `LURPAX_YKMAN_PATH` if the error reappears.
 
 ## How It Works
 
@@ -211,7 +276,7 @@ See [SECURITY.md](SECURITY.md) for the full threat model and limitations.
 ## Documentation
 
 | Document | Description |
-|---|---|
+| --- | --- |
 | [SECURITY.md](SECURITY.md) | Threat model, cryptographic choices, and limitations |
 | [docs/FORMAT.md](docs/FORMAT.md) | Binary format specification |
 | [docs/DESIGN.md](docs/DESIGN.md) | Architecture, module graph, and data flow |

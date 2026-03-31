@@ -29,7 +29,7 @@ This is inherent: the implementation must parse metadata before decryption.
 
 ## YubiKey / `ykman`
 
-The tool invokes `ykman otp calculate <slot>` with the challenge on **stdin**. The resolved `ykman` binary is validated (regular file, ownership, permissions, parent directories). Override path with `LURPAX_YKMAN_PATH` only when necessary; that bypasses the standard search list.
+The tool invokes `ykman otp calculate <slot>` with the challenge on **stdin** as **lowercase hexadecimal** (64 nybbles + newline), matching `ykman`’s documented challenge format. The resolved `ykman` binary is validated (regular file, ownership, permissions, parent directories). Override path with `LURPAX_YKMAN_PATH` only when necessary; that bypasses the standard search list.
 
 ## Limitations
 

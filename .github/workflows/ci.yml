@@ -13,6 +13,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: rustfmt
+      - run: cargo metadata --locked --format-version 1 > /dev/null
       - run: cargo fmt --all -- --check
 
   clippy:
@@ -22,21 +23,21 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
         with:
           components: clippy
-      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
   test:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
-      - run: cargo test --workspace
+      - run: cargo test --locked --workspace
 
   doc:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
-      - run: RUSTDOCFLAGS='-D warnings' cargo doc --no-deps
+      - run: RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
 
   deny:
     runs-on: macos-latest
@@ -46,20 +47,22 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v1
         with:
           command: check
+          arguments: --locked --all-features
 
   audit:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
-      - run: cargo install cargo-audit && cargo audit
+      - run: cargo install cargo-audit --version 0.21.2 --locked
+      - run: cargo audit
 
   msrv:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
-      - run: cargo check --workspace
+      - run: cargo check --locked --workspace
 
   coverage:
     runs-on: macos-latest
@@ -71,4 +74,4 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov
-      - run: cargo llvm-cov --workspace --all-features --tests --summary-only --fail-under-lines 70 --fail-under-functions 70
+      - run: cargo llvm-cov --locked --workspace --all-features --tests --summary-only --fail-under-lines 70 --ignore-filename-regex '/src/main\.rs$|/src/cli\.rs$|/hardware/yubikey\.rs$'

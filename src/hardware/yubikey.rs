@@ -1,4 +1,4 @@
-//! Hardened `ykman otp calculate` invocation (challenge on stdin).
+//! Hardened `ykman otp calculate` invocation (challenge as **hex** on stdin; see Yubico docs).
 
 use std::fs;
 use std::io::Write;
@@ -23,9 +23,12 @@ fn validate_ykman_path(path: &Path) -> Result<()> {
     // AUDIT: lstat (symlink_metadata) to detect symlinks without following them.
     let meta = fs::symlink_metadata(path)?;
     if meta.is_symlink() {
-        return Err(LurpaxError::YubiKey(
-            "ykman path must not be a symlink".into(),
-        ));
+        return Err(LurpaxError::YubiKey(format!(
+            "ykman path must not be a symlink. Package managers (e.g. Homebrew) symlink `bin/ykman`; lurpax only executes a regular file.\n\
+             Set {} to the symlink target. Hint: `ls -l \"$(which ykman)\"` shows it; on Linux `readlink -f \"$(which ykman)\"` prints the path.\n\
+             See README (YubiKey Setup).",
+            ENV_YKMAN_PATH
+        )));
     }
     if !meta.is_file() {
         return Err(LurpaxError::YubiKey("ykman is not a regular file".into()));
@@ -86,6 +89,18 @@ fn resolve_ykman_path() -> Result<PathBuf> {
     ))
 }
 
+/// 32-byte challenge as 64 lowercase hex ASCII bytes + newline (`ykman` expects hex, not raw binary).
+fn challenge_hex_line(challenge: &[u8; 32]) -> [u8; 65] {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = [0u8; 65];
+    for (i, &b) in challenge.iter().enumerate() {
+        out[i * 2] = HEX[usize::from(b >> 4)];
+        out[i * 2 + 1] = HEX[usize::from(b & 0xf)];
+    }
+    out[64] = b'\n';
+    out
+}
+
 fn sanitize_stderr(s: &str) -> String {
     s.chars()
         .filter(|c| !c.is_control() || *c == '\n')
@@ -102,6 +117,10 @@ impl YubiKeyPort for RealYubiKey {
             return Err(LurpaxError::YubiKey("slot must be 1 or 2".into()));
         }
         let ykman = resolve_ykman_path()?;
+        eprintln!(
+            "YubiKey: touch the key now if it flashes or blinks (challenge-response, slot {}).",
+            slot
+        );
         let mut child = Command::new(&ykman)
             .args(["otp", "calculate", &slot.to_string()])
             .stdin(Stdio::piped())
@@ -110,8 +129,9 @@ impl YubiKeyPort for RealYubiKey {
             .spawn()
             .map_err(|e| LurpaxError::YubiKey(format!("spawn ykman: {e}")))?;
         if let Some(mut stdin) = child.stdin.take() {
+            let line = challenge_hex_line(challenge);
             stdin
-                .write_all(challenge)
+                .write_all(&line)
                 .map_err(|e| LurpaxError::YubiKey(format!("stdin: {e}")))?;
         }
         let out = child
@@ -144,5 +164,23 @@ impl YubiKeyPort for RealYubiKey {
                 u8::from_str_radix(s, 16).map_err(|_| LurpaxError::YubiKey("hex parse".into()))?;
         }
         Ok(outb)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::challenge_hex_line;
+
+    #[test]
+    fn challenge_hex_line_lowercase_and_newline() {
+        let mut c = [0u8; 32];
+        c[0] = 0;
+        c[1] = 1;
+        c[2] = 0xff;
+        c[3] = 0xa1;
+        let line = challenge_hex_line(&c);
+        assert_eq!(&line[..6], b"0001ff");
+        assert_eq!(line[6..8], *b"a1");
+        assert_eq!(line[64], b'\n');
     }
 }

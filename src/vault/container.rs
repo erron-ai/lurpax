@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::constants::MAGIC;
 use crate::errors::{LurpaxError, Result};
 use crate::vault::header::{
-    expected_file_len, read_header_len_prefix, shard_cipher_size, total_shards, Header,
+    Header, expected_file_len, read_header_len_prefix, shard_cipher_size, total_shards,
 };
 
 /// Parsed vault layout references.

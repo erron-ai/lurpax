@@ -1,15 +1,15 @@
 //! Binary entry: process hardening and CLI dispatch.
 
 use std::io;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Parser;
 #[cfg(target_os = "linux")]
 use libc::c_int;
 #[cfg(unix)]
-use libc::{rlimit, setrlimit, RLIMIT_CORE, RLIM_INFINITY};
-use lurpax::cli::{run, Cli};
+use libc::{RLIM_INFINITY, RLIMIT_CORE, rlimit, setrlimit};
+use lurpax::cli::{Cli, run};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::flag;
 

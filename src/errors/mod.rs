@@ -1,7 +1,7 @@
 //! Typed errors — no sensitive material in `Display` output.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use thiserror::Error;
 

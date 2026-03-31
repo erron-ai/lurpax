@@ -2,16 +2,16 @@
 
 use std::fs::{self, File, OpenOptions};
 use std::path::{Component, Path, PathBuf};
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use tar::Archive;
 
 use crate::constants::{
-    DEFAULT_MAX_DECOMPRESSED_BYTES, DEFAULT_MAX_FILES, DEFAULT_MAX_FILE_SIZE,
+    DEFAULT_MAX_DECOMPRESSED_BYTES, DEFAULT_MAX_FILE_SIZE, DEFAULT_MAX_FILES,
     DEFAULT_MAX_INPUT_BYTES,
 };
-use crate::errors::{check_interrupted, LurpaxError, Result};
+use crate::errors::{LurpaxError, Result, check_interrupted};
 
 /// Limits for `create` (source tree) and `open` (extracted output).
 #[derive(Debug, Clone)]

@@ -2,8 +2,8 @@
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use clap::{Parser, Subcommand};
 use zeroize::Zeroizing;
@@ -45,7 +45,9 @@ YUBIKEY SETUP:
      The vault header stores the slot and challenge; no extra flags needed.
 
   ykman is found at /usr/bin/ykman, /usr/local/bin/ykman, or
-  /opt/homebrew/bin/ykman. Override with LURPAX_YKMAN_PATH=/path/to/ykman.";
+  /opt/homebrew/bin/ykman. Override with LURPAX_YKMAN_PATH=/path/to/ykman
+  (must be a regular file, not a symlink — Homebrew's bin/ykman is usually a symlink;
+  resolve it and set LURPAX_YKMAN_PATH to the target; see README YubiKey Setup).";
 
 /// Available subcommands.
 #[derive(Subcommand, Debug)]

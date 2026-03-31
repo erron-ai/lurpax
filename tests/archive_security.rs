@@ -3,8 +3,8 @@
 use std::fs;
 use std::io::Write;
 
-use lurpax::archive::{extract_tar, tar_input, ArchiveLimits};
 use lurpax::LurpaxError;
+use lurpax::archive::{ArchiveLimits, extract_tar, tar_input};
 
 #[test]
 fn symlink_in_source_rejected() {

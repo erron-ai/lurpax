@@ -2,4 +2,4 @@
 
 pub mod tar;
 
-pub use tar::{extract_tar, tar_input, ArchiveLimits};
+pub use tar::{ArchiveLimits, extract_tar, tar_input};

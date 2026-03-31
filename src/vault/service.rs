@@ -3,12 +3,12 @@
 use std::fs::File;
 use std::io::{Seek, SeekFrom};
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use zeroize::{Zeroize, Zeroizing};
 
-use crate::archive::{extract_tar, tar_input, ArchiveLimits};
+use crate::archive::{ArchiveLimits, extract_tar, tar_input};
 use crate::constants::{
     CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, KDF_ARGON2ID, RS_DATA_SHARDS_PER_GROUP,
     RS_PARITY_SHARDS_PER_GROUP,
@@ -17,7 +17,7 @@ use crate::crypto::{
     commitment_hmac, compose_ikm, decrypt_single_chunk, derive_subkeys, encrypt_all_chunks,
     verify_commitment, zeroize_master,
 };
-use crate::errors::{check_interrupted, LurpaxError, Result, VerifyHealth};
+use crate::errors::{LurpaxError, Result, VerifyHealth, check_interrupted};
 use crate::hardware::YubiKeyPort;
 use crate::recovery::checksum::damaged_from_table;
 use crate::recovery::fec::repair_group;
@@ -481,7 +481,7 @@ impl VaultService {
 mod shard_layout_tests {
     use proptest::prelude::*;
 
-    use super::{chunk_to_shard_index, collect_data_shards, shard_group_range, Header};
+    use super::{Header, chunk_to_shard_index, collect_data_shards, shard_group_range};
     use crate::constants::{
         CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, KDF_ARGON2ID, RS_DATA_SHARDS_PER_GROUP,
         RS_PARITY_SHARDS_PER_GROUP,
