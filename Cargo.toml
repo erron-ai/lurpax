@@ -25,7 +25,7 @@ thiserror = "1.0"
 # Password hashing — Argon2id only in v1
 argon2 = "=0.5.3"
 # HKDF subkey separation from Argon2 master output (pinned per audit policy)
-hkdf = "=0.12.4"
+hkdf = "=0.13.0"
 # HMAC-SHA256 key commitment (domain-separated from AEAD key, pinned per audit policy)
 hmac = "=0.12.1"
 sha2 = "=0.10.8"
