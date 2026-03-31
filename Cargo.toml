@@ -6,6 +6,10 @@ rust-version = "1.85"
 description = "Lurpax — encrypted snapshot vault CLI (Erron.ai)"
 license = "MIT"
 readme = "README.md"
+repository = "https://github.com/erronai/lurpax"
+homepage = "https://github.com/erronai/lurpax"
+keywords = ["encryption", "backup", "vault", "security", "cli"]
+categories = ["command-line-utilities", "cryptography"]
 
 [[bin]]
 name = "lurpax"
