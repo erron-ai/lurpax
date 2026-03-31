@@ -46,11 +46,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      # cargo-deny 0.19+ needs Rust >= 1.88; pulls CVSS 4.0–aware rustsec like cargo-audit 0.22.
+      # cargo-deny 0.19+ needs Rust >= 1.88; pulls CVSS-4.0-aware rustsec like cargo-audit 0.22.
       - uses: dtolnay/rust-toolchain@1.88.0
       # Avoid EmbarkStudios/cargo-deny-action: Docker actions do not run on macOS runners.
       - run: cargo install cargo-deny --version 0.19.0 --locked
-      - run: "$HOME/.cargo/bin/cargo-deny" --locked --all-features check
+      - run: $HOME/.cargo/bin/cargo-deny --locked --all-features check
 
   audit:
     runs-on: macos-latest
@@ -59,7 +59,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
       # 0.22+ parses CVSS 4.0 in RustSec DB; --force avoids a stale binary shadowing ~/.cargo/bin.
       - run: cargo install cargo-audit --version 0.22.1 --locked --force
-      - run: "$HOME/.cargo/bin/cargo-audit" audit
+      - run: $HOME/.cargo/bin/cargo-audit audit
 
   msrv:
     runs-on: macos-latest
