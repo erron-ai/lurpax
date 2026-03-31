@@ -2,7 +2,7 @@
 
 Encrypted snapshot vault CLI by Erron.ai. Produces `.lurpax` files: **zstd-compressed tar**, **chunked XChaCha20-Poly1305**, **Argon2id + HKDF** key separation, **HMAC key commitment**, **Reed–Solomon** parity, **CRC-32C** shard table.
 
-**MSRV:** Rust 1.74+
+**MSRV:** Rust 1.85+
 
 ## Commands
 
