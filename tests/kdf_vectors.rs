@@ -49,9 +49,13 @@ fn subkey_derivation_properties() {
     assert_ne!(master, [0u8; 64], "master key must not be all zeros");
 
     let (enc, commit) = derive_subkeys(&master).unwrap();
-    assert_eq!(enc.len(), 32);
-    assert_eq!(commit.len(), 32);
-    assert_ne!(enc, commit, "enc_key and commit_key must differ");
-    assert_ne!(enc, [0u8; 32]);
-    assert_ne!(commit, [0u8; 32]);
+    assert_eq!(enc.as_ref().len(), 32);
+    assert_eq!(commit.as_ref().len(), 32);
+    assert_ne!(
+        enc.as_ref(),
+        commit.as_ref(),
+        "enc_key and commit_key must differ"
+    );
+    assert_ne!(enc.as_ref(), &[0u8; 32]);
+    assert_ne!(commit.as_ref(), &[0u8; 32]);
 }

@@ -116,20 +116,21 @@ fn read_password_file(path: &std::path::Path) -> Result<Zeroizing<Vec<u8>>> {
             "password file must not be a symlink".into(),
         ));
     }
-    let raw = fs::read(path)?;
-    if raw.is_empty() {
+    let mut s = Zeroizing::new(fs::read(path)?);
+    if s.is_empty() {
         return Err(LurpaxError::Password("password must not be empty".into()));
     }
-    let mut s = raw;
     if s.ends_with(b"\r\n") {
-        s.truncate(s.len() - 2);
+        let n = s.len();
+        s.truncate(n - 2);
     } else if s.ends_with(b"\n") {
-        s.truncate(s.len() - 1);
+        let n = s.len();
+        s.truncate(n - 1);
     }
     if s.is_empty() || s.len() > crate::constants::MAX_PASSWORD_LEN {
         return Err(LurpaxError::Password("password length invalid".into()));
     }
-    Ok(Zeroizing::new(s))
+    Ok(s)
 }
 
 fn read_password_interactive(confirm: bool) -> Result<Zeroizing<Vec<u8>>> {
@@ -137,7 +138,7 @@ fn read_password_interactive(confirm: bool) -> Result<Zeroizing<Vec<u8>>> {
     for _ in 0..3 {
         let p = rpassword::prompt_password("Password: ")
             .map_err(|e| LurpaxError::Password(format!("tty: {e}")))?;
-        let bytes = p.into_bytes();
+        let bytes = Zeroizing::new(p.into_bytes());
         if !(MIN_PASSWORD_LEN..=MAX_PASSWORD_LEN).contains(&bytes.len()) {
             eprintln!("password must be 1..=8192 bytes");
             continue;
@@ -146,12 +147,12 @@ fn read_password_interactive(confirm: bool) -> Result<Zeroizing<Vec<u8>>> {
             let p2 = rpassword::prompt_password("Confirm password: ")
                 .map_err(|e| LurpaxError::Password(format!("tty: {e}")))?;
             let p2_bytes = Zeroizing::new(p2.into_bytes());
-            if *p2_bytes != bytes {
+            if *p2_bytes != *bytes {
                 eprintln!("passwords do not match");
                 continue;
             }
         }
-        return Ok(Zeroizing::new(bytes));
+        return Ok(bytes);
     }
     Err(LurpaxError::Password(
         "too many failed password attempts".into(),

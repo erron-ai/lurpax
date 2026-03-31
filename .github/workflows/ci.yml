@@ -40,7 +40,8 @@ jobs:
       - run: RUSTDOCFLAGS='-D warnings' cargo doc --locked --no-deps
 
   deny:
-    runs-on: macos-latest
+    # cargo-deny-action runs in a container (Docker); GitHub only supports that on Linux runners.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
@@ -54,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.85.0
-      - run: cargo install cargo-audit --version 0.21.2 --locked
+      - run: cargo install cargo-audit --version 0.22.1 --locked
       - run: cargo audit
 
   msrv:

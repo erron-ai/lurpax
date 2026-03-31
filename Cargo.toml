@@ -43,10 +43,10 @@ zstd = "0.13.2"
 tar = "0.4.41"
 
 # Zeroization of key material; memsec pins sensitive pages from swap where supported
-zeroize = { version = "1.7", features = ["zeroize_derive"] }
-memsec = "0.6.3"
+zeroize = { version = "=1.8.2", features = ["zeroize_derive"] }
+memsec = "=0.6.3"
 # OS CSPRNG — failures are fatal (no userland fallback)
-getrandom = "0.2.15"
+getrandom = "=0.2.17"
 # Cooperative shutdown without unsafe signal-handler work
 signal-hook = "0.3.17"
 # RLIMIT_CORE / platform hooks for hardening

@@ -10,6 +10,9 @@ use crate::constants::{
 };
 use crate::errors::{LurpaxError, Result};
 
+/// HKDF-derived AEAD key and key-commitment subkey; both zeroed on drop.
+pub type DerivedSubkeys = (Zeroizing<[u8; 32]>, Zeroizing<[u8; 32]>);
+
 /// Builds length-prefixed input keying material for Argon2id.
 pub fn compose_ikm(password: &[u8], yubi_response: Option<&[u8]>) -> Result<Zeroizing<Vec<u8>>> {
     // AUDIT: reject empty and oversized passwords before KDF work
@@ -53,7 +56,9 @@ pub fn argon2_derive_master(
 }
 
 /// HKDF expands `master` into AEAD and commitment subkeys; caller must zeroize `master` after.
-pub fn derive_subkeys(master: &[u8]) -> Result<([u8; 32], [u8; 32])> {
+///
+/// Subkeys are [`Zeroizing`] so they are cleared on drop even when callers return early via `?`.
+pub fn derive_subkeys(master: &[u8]) -> Result<DerivedSubkeys> {
     if master.len() != ARGON2_OUTPUT_LEN {
         return Err(LurpaxError::Crypto("invalid master length".into()));
     }
@@ -65,7 +70,7 @@ pub fn derive_subkeys(master: &[u8]) -> Result<([u8; 32], [u8; 32])> {
         .map_err(|_| LurpaxError::Crypto("hkdf enc".into()))?;
     hk.expand(HKDF_INFO_COMMIT, &mut commit)
         .map_err(|_| LurpaxError::Crypto("hkdf commit".into()))?;
-    Ok((enc, commit))
+    Ok((Zeroizing::new(enc), Zeroizing::new(commit)))
 }
 
 /// Zeroizes the Argon2 master buffer.

@@ -23,14 +23,11 @@ pub fn verify_commitment(
     base_nonce: &[u8; 24],
     expected: &[u8; 32],
 ) -> Result<()> {
-    let got = commitment_hmac(commit_key, base_nonce)?;
-    let mut diff = 0u8;
-    // AUDIT: constant-time comparison prevents timing side-channel on key commitment
-    for (a, b) in got.iter().zip(expected.iter()) {
-        diff |= a ^ b;
-    }
-    if diff != 0 {
-        return Err(LurpaxError::DecryptAuthFailed);
-    }
+    let mut mac = HmacSha256::new_from_slice(commit_key)
+        .map_err(|_| LurpaxError::Crypto("hmac key".into()))?;
+    mac.update(base_nonce);
+    // AUDIT: `verify_slice` uses subtle barriers; manual XOR loops are not compiler-guaranteed CT
+    mac.verify_slice(expected)
+        .map_err(|_| LurpaxError::DecryptAuthFailed)?;
     Ok(())
 }

@@ -159,7 +159,7 @@ pub fn extract_tar(
 ) -> Result<()> {
     fs::create_dir_all(dest_dir)?;
     let base = fs::canonicalize(dest_dir)?;
-    let tmp_name = format!(".lurpax-extracting-{}", random_hex_8()?);
+    let tmp_name = format!(".lurpax-extracting-{}", random_hex_32()?);
     let tmp = base.join(&tmp_name);
     if tmp.exists() {
         return Err(LurpaxError::Io(std::io::Error::new(
@@ -219,6 +219,10 @@ fn extract_into_dir(
             fs::create_dir_all(parent)?;
         }
         if entry.header().entry_type().is_dir() {
+            files = files.saturating_add(1);
+            if files > limits.max_files {
+                return Err(LurpaxError::LimitExceeded("too many entries".into()));
+            }
             fs::create_dir_all(&target)?;
             continue;
         }
@@ -284,9 +288,9 @@ fn normalize_permissions_recursive(_path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn random_hex_8() -> Result<String> {
+fn random_hex_32() -> Result<String> {
     // AUDIT: CSPRNG failure is a hard fatal error — never fall back.
-    let mut b = [0u8; 4];
+    let mut b = [0u8; 16];
     getrandom::getrandom(&mut b).map_err(|_| LurpaxError::RandomUnavailable)?;
-    Ok(format!("{:02x}{:02x}{:02x}{:02x}", b[0], b[1], b[2], b[3]))
+    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
 }

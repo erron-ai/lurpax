@@ -8,7 +8,7 @@ use clap::Parser;
 #[cfg(target_os = "linux")]
 use libc::c_int;
 #[cfg(unix)]
-use libc::{RLIM_INFINITY, RLIMIT_CORE, rlimit, setrlimit};
+use libc::{RLIMIT_CORE, rlimit, setrlimit};
 use lurpax::cli::{Cli, run};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
 use signal_hook::flag;
@@ -17,12 +17,14 @@ use signal_hook::flag;
 fn set_core_limit_zero() {
     let lim = rlimit {
         rlim_cur: 0,
-        rlim_max: RLIM_INFINITY,
+        rlim_max: 0,
     };
     // SAFETY: `setrlimit` is a POSIX API; `lim` is a valid stack value.
     unsafe {
         // AUDIT: prevent core dumps from writing key material to disk
-        let _ = setrlimit(RLIMIT_CORE, &lim);
+        if setrlimit(RLIMIT_CORE, &lim) != 0 {
+            eprintln!("warning: failed to restrict core dump size (setrlimit)");
+        }
     }
 }
 
@@ -35,7 +37,9 @@ fn set_no_dump() {
     // SAFETY: `prctl` is a Linux syscall; constant is defined by the kernel ABI.
     unsafe {
         // AUDIT: prevent ptrace attachment on Linux
-        libc::prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
+        if libc::prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0 {
+            eprintln!("warning: failed to set PR_SET_DUMPABLE");
+        }
     }
 }
 

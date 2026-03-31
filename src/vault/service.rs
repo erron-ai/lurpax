@@ -6,7 +6,9 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
-use zeroize::{Zeroize, Zeroizing};
+use std::ops::Deref;
+
+use zeroize::Zeroizing;
 
 use crate::archive::{ArchiveLimits, extract_tar, tar_input};
 use crate::constants::{
@@ -14,8 +16,8 @@ use crate::constants::{
     RS_PARITY_SHARDS_PER_GROUP,
 };
 use crate::crypto::{
-    commitment_hmac, compose_ikm, decrypt_single_chunk, derive_subkeys, encrypt_all_chunks,
-    verify_commitment, zeroize_master,
+    DerivedSubkeys, commitment_hmac, compose_ikm, decrypt_single_chunk, derive_subkeys,
+    encrypt_all_chunks, verify_commitment, zeroize_master,
 };
 use crate::errors::{LurpaxError, Result, VerifyHealth, check_interrupted};
 use crate::hardware::YubiKeyPort;
@@ -67,7 +69,7 @@ fn derive_keys_from_password(
     header: &Header,
     password: &[u8],
     yubi: Option<&[u8]>,
-) -> Result<([u8; 32], [u8; 32])> {
+) -> Result<DerivedSubkeys> {
     let ikm = compose_ikm(password, yubi)?;
     let mut master = Zeroizing::new([0u8; 64]);
     crate::crypto::kdf::argon2_derive_master(
@@ -82,8 +84,8 @@ fn derive_keys_from_password(
     let (mut enc, mut commit) = derive_subkeys(master.as_ref())?;
     zeroize_master(master.as_mut());
     // AUDIT: mlock subkeys to prevent swap exposure.
-    try_mlock_secret(&mut enc);
-    try_mlock_secret(&mut commit);
+    try_mlock_secret(enc.as_mut());
+    try_mlock_secret(commit.as_mut());
     Ok((enc, commit))
 }
 
@@ -246,7 +248,7 @@ impl VaultService {
             let y =
                 yubi.ok_or_else(|| LurpaxError::YubiKey("internal: missing yubi port".into()))?;
             let r = y.otp_calculate(slot, &yubi_challenge)?;
-            Some(Zeroizing::new(r.to_vec()))
+            Some(Zeroizing::new(Vec::from(*r)))
         } else {
             None
         };
@@ -282,15 +284,15 @@ impl VaultService {
             master.as_mut(),
         )?;
         try_mlock_secret(master.as_mut());
-        let (mut enc_key, mut commit_key) = derive_subkeys(master.as_ref())?;
+        let (enc_key, commit_key) = derive_subkeys(master.as_ref())?;
         zeroize_master(master.as_mut());
         // AUDIT: key commitment computed with domain-separated commit_key.
-        header.key_commitment = commitment_hmac(&commit_key, &header.base_nonce)?;
-        commit_key.zeroize();
+        header.key_commitment = commitment_hmac(commit_key.deref(), &header.base_nonce)?;
+        drop(commit_key);
         let header_body = header.to_bytes();
         check_interrupted(term.as_ref())?;
-        let enc_shards = encrypt_all_chunks(&header, &header_body, &compressed, &enc_key)?;
-        enc_key.zeroize();
+        let enc_shards = encrypt_all_chunks(&header, &header_body, &compressed, enc_key.deref())?;
+        drop(enc_key);
         let plain_shards: Vec<Vec<u8>> = enc_shards.into_iter().map(|z| (*z).clone()).collect();
         check_interrupted(term.as_ref())?;
         let disk_shards = layout_shards_with_rs(plain_shards, &header)?;
@@ -336,6 +338,8 @@ impl VaultService {
 
         // RS repair pass 1: fix CRC-detected damage.
         let mut repaired = repair_all_groups(&mut shards, &header, &damaged)?;
+        // AUDIT: repaired shards are clean; stale `true` entries would overcount damage on AEAD retry.
+        damaged.fill(false);
         check_interrupted(term.as_ref())?;
 
         // Key derivation (after RS, before AEAD).
@@ -343,16 +347,19 @@ impl VaultService {
             let y =
                 yubi.ok_or_else(|| LurpaxError::YubiKey("YubiKey required for this vault".into()))?;
             let r = y.otp_calculate(header.yubi_slot, &header.yubi_challenge)?;
-            Some(Zeroizing::new(r.to_vec()))
+            Some(Zeroizing::new(Vec::from(*r)))
         } else {
             None
         };
         let yubi_slice = yubi_bytes.as_ref().map(|b| b.as_slice());
-        let (mut enc_key, mut commit_key) =
-            derive_keys_from_password(&header, password, yubi_slice)?;
+        let (enc_key, commit_key) = derive_keys_from_password(&header, password, yubi_slice)?;
         // AUDIT: key commitment verified before any AEAD decryption for fast wrong-password rejection.
-        verify_commitment(&commit_key, &header.base_nonce, &header.key_commitment)?;
-        commit_key.zeroize();
+        verify_commitment(
+            commit_key.deref(),
+            &header.base_nonce,
+            &header.key_commitment,
+        )?;
+        drop(commit_key);
 
         // Per-chunk AEAD decryption with fallback pass for CRC false negatives.
         // AUDIT: one logical data-shard view; refresh only the RS group touched on AEAD retry
@@ -363,7 +370,13 @@ impl VaultService {
         for chunk_idx in 0..n {
             check_interrupted(term.as_ref())?;
             let shard_data = data_shards[chunk_idx].as_slice();
-            match decrypt_single_chunk(&header, &header_body, shard_data, chunk_idx, &enc_key) {
+            match decrypt_single_chunk(
+                &header,
+                &header_body,
+                shard_data,
+                chunk_idx,
+                enc_key.deref(),
+            ) {
                 Ok(pt) => plain.extend_from_slice(&pt),
                 Err(LurpaxError::DecryptAuthFailed) => {
                     // AUDIT: AEAD failure on CRC-clean shard = CRC false negative.
@@ -393,14 +406,14 @@ impl VaultService {
                         &header_body,
                         data_shards[chunk_idx].as_slice(),
                         chunk_idx,
-                        &enc_key,
+                        enc_key.deref(),
                     )?;
                     plain.extend_from_slice(&pt);
                 }
                 Err(e) => return Err(e),
             }
         }
-        enc_key.zeroize();
+        drop(enc_key);
 
         if plain.len() as u64 != header.compressed_payload_size {
             return Err(LurpaxError::DecryptAuthFailed);

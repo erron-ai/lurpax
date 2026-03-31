@@ -5,14 +5,21 @@ use std::io::Write;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+
+use zeroize::Zeroizing;
 
 use crate::constants::{ENV_YKMAN_PATH, YKMAN_CANDIDATE_PATHS, YUBI_RESPONSE_HEX_LEN};
 use crate::errors::{LurpaxError, Result};
 
+const YKMAN_WAIT_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Computes the 20-byte YubiKey response for a stored challenge.
 pub trait YubiKeyPort {
     /// Runs challenge-response for OTP slot `1` or `2`.
-    fn otp_calculate(&self, slot: u8, challenge: &[u8; 32]) -> Result<[u8; 20]>;
+    fn otp_calculate(&self, slot: u8, challenge: &[u8; 32]) -> Result<Zeroizing<[u8; 20]>>;
 }
 
 fn is_world_writable(mode: u32) -> bool {
@@ -108,11 +115,35 @@ fn sanitize_stderr(s: &str) -> String {
         .collect()
 }
 
+fn ykman_minimal_env() -> Vec<(String, String)> {
+    let path = std::env::var("PATH")
+        .unwrap_or_else(|_| "/usr/bin:/usr/local/bin:/opt/homebrew/bin".to_string());
+    let mut out = vec![("PATH".to_string(), path)];
+    if let Ok(h) = std::env::var("HOME") {
+        out.push(("HOME".to_string(), h));
+    }
+    if let Ok(u) = std::env::var("USER") {
+        out.push(("USER".to_string(), u));
+    }
+    out
+}
+
+#[cfg(unix)]
+fn kill_ykman_child(pid: u32) {
+    // SAFETY: `kill` is a POSIX API; SIGKILL terminates the stuck `ykman` process.
+    unsafe {
+        let _ = libc::kill(pid as libc::pid_t, libc::SIGKILL);
+    }
+}
+
+#[cfg(not(unix))]
+fn kill_ykman_child(_pid: u32) {}
+
 /// Production `ykman` backend.
 pub struct RealYubiKey;
 
 impl YubiKeyPort for RealYubiKey {
-    fn otp_calculate(&self, slot: u8, challenge: &[u8; 32]) -> Result<[u8; 20]> {
+    fn otp_calculate(&self, slot: u8, challenge: &[u8; 32]) -> Result<Zeroizing<[u8; 20]>> {
         if slot != 1 && slot != 2 {
             return Err(LurpaxError::YubiKey("slot must be 1 or 2".into()));
         }
@@ -121,22 +152,42 @@ impl YubiKeyPort for RealYubiKey {
             "YubiKey: touch the key now if it flashes or blinks (challenge-response, slot {}).",
             slot
         );
-        let mut child = Command::new(&ykman)
-            .args(["otp", "calculate", &slot.to_string()])
+        let mut cmd = Command::new(&ykman);
+        cmd.args(["otp", "calculate", &slot.to_string()])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .env_clear();
+        for (k, v) in ykman_minimal_env() {
+            cmd.env(k, v);
+        }
+        let mut child = cmd
             .spawn()
             .map_err(|e| LurpaxError::YubiKey(format!("spawn ykman: {e}")))?;
+        let pid = child.id();
         if let Some(mut stdin) = child.stdin.take() {
             let line = challenge_hex_line(challenge);
             stdin
                 .write_all(&line)
                 .map_err(|e| LurpaxError::YubiKey(format!("stdin: {e}")))?;
         }
-        let out = child
-            .wait_with_output()
-            .map_err(|e| LurpaxError::YubiKey(format!("ykman: {e}")))?;
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            let _ = tx.send(child.wait_with_output());
+        });
+        let out = match rx.recv_timeout(YKMAN_WAIT_TIMEOUT) {
+            Ok(Ok(out)) => out,
+            Ok(Err(e)) => {
+                return Err(LurpaxError::YubiKey(format!("ykman: {e}")));
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                kill_ykman_child(pid);
+                return Err(LurpaxError::YubiKey("ykman timed out".into()));
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(LurpaxError::YubiKey("ykman wait failed".into()));
+            }
+        };
         if !out.status.success() {
             let msg = sanitize_stderr(&String::from_utf8_lossy(&out.stderr));
             return Err(LurpaxError::YubiKey(format!(
@@ -149,11 +200,16 @@ impl YubiKeyPort for RealYubiKey {
             .map(str::trim)
             .find(|l| !l.is_empty())
             .ok_or_else(|| LurpaxError::YubiKey("empty ykman output".into()))?;
-        let hex_clean: String = hex_line.chars().filter(|c| c.is_ascii_hexdigit()).collect();
+        let hex_clean = Zeroizing::new(
+            hex_line
+                .chars()
+                .filter(|c| c.is_ascii_hexdigit())
+                .collect::<String>(),
+        );
         if hex_clean.len() != YUBI_RESPONSE_HEX_LEN {
             return Err(LurpaxError::YubiKey("invalid ykman response length".into()));
         }
-        let mut outb = [0u8; 20];
+        let mut outb = Zeroizing::new([0u8; 20]);
         for (i, chunk) in hex_clean.as_bytes().chunks(2).enumerate() {
             if i >= 20 {
                 break;
