@@ -1,5 +1,6 @@
 //! Bounded tar pack/unpack with path safety checks.
 
+use std::fmt::Write;
 use std::fs::{self, File, OpenOptions};
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
@@ -292,5 +293,8 @@ fn random_hex_32() -> Result<String> {
     // AUDIT: CSPRNG failure is a hard fatal error — never fall back.
     let mut b = [0u8; 16];
     getrandom::getrandom(&mut b).map_err(|_| LurpaxError::RandomUnavailable)?;
-    Ok(b.iter().map(|x| format!("{x:02x}")).collect())
+    Ok(b.iter().fold(String::with_capacity(32), |mut acc, &x| {
+        let _ = write!(acc, "{x:02x}");
+        acc
+    }))
 }
