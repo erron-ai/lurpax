@@ -35,6 +35,16 @@ Serialized sequentially, no padding. Fields **1–15** are shared; the tail depe
 14. `yubi_required: u8` — `0` or `1`
 15. `yubi_slot: u8` — `0`, `1`, or `2`
 
+### Policy bounds (validated on `open`)
+
+Implementations **must** reject headers outside these ranges (see `src/constants.rs`):
+
+| Field | Allowed values |
+|--------|----------------|
+| `argon2_mem_kib` | **262 144** KiB only (256 MiB; min and max coincide) |
+| `argon2_iterations` | **3–10** |
+| `argon2_parallelism` | **1–16** |
+
 ### Tail (version-specific)
 
 - **`version == 1`:** `yubi_challenge: [u8; 32]` — plaintext challenge when `yubi_required`; otherwise zero. Header body length **161** bytes.

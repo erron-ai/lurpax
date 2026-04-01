@@ -296,6 +296,8 @@ See [SECURITY.md](SECURITY.md) for the full threat model and limitations.
 | [docs/DESIGN.md](docs/DESIGN.md) | Architecture, module graph, and data flow |
 | [docs/AUDIT_GUIDE.md](docs/AUDIT_GUIDE.md) | Guide for security auditors |
 
+The repository includes **`example/e2e_corruption_test.sh`**, an optional end-to-end check (large nested tree → vault → ciphertext corruption → open → byte-for-byte verify).
+
 ## License
 
 MIT

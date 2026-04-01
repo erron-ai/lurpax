@@ -1,6 +1,6 @@
 [package]
 name = "lurpax"
-version = "0.10.1"
+version = "0.11.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Lurpax — encrypted snapshot vault CLI (Erron.ai)"
@@ -30,7 +30,7 @@ hkdf = "=0.12.4"
 hmac = "=0.12.1"
 sha2 = "=0.10.8"
 # XChaCha20-Poly1305 per-chunk AEAD (pinned per audit policy)
-chacha20poly1305 = "=0.10.1"
+chacha20poly1305 = "=0.11.0"
 
 # Reed–Solomon parity shards for burst corruption recovery
 reed-solomon-erasure = "6.0.0"

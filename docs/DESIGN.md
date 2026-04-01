@@ -51,7 +51,7 @@ hardware::yubikey
 | Boundary | Inside (trusted for purpose) | Outside / untrusted |
 |----------|------------------------------|---------------------|
 | Password / YubiKey response | User input and optional `ykman` stdout | Hostile process reading TTY, spoofing `ykman` |
-| Vault file on disk | Bytes we parse after length checks | Attacker-controlled file; must not cause UB or KDF abuse |
+| Vault file on disk | Bytes we parse after length checks | Attacker-controlled file; must not cause UB; Argon2 costs bounded in `header::validate_schema` before KDF work |
 | Header (plaintext) | Parsed fields drive limits before big allocations | Visible metadata (see `SECURITY.md`) |
 | Decrypted payload | Only after commitment + AEAD success | Ciphertext, CRC table, RS shards before verify |
 | Extract tree | Output under user-chosen `--out-dir` | Symlinks / paths inside tar; constrained by archive policy |
@@ -92,7 +92,7 @@ When tests and optional streaming refactors land, the RS group iteration remains
 
 ### Create (detailed)
 
-1. **CLI / `VaultService::create`** — Validate output path does not exist; apply interrupt flag checks.
+1. **CLI / `VaultService::create`** — Validate output path does not exist; apply interrupt flag checks. Stale **`*.lurpax.partial`** siblings are **not** removed preemptively: `container::write_atomic` opens the temp path with **`create_new`**, so an interrupted run leaves a file that must be deleted manually (avoids check/remove races).
 2. **`archive::tar_input`** — Walk file or directory with `ArchiveLimits` (max files, bytes, per-file size); build deterministic tar in memory.
 3. **`zstd_compress`** — Whole-stream compression (level 3) before any encryption.
 4. **Header seeding** — Random salt, `base_nonce`, optional YubiKey challenge/response via `YubiKeyPort`; fill Argon2 parameters and RS layout constants.
@@ -100,7 +100,7 @@ When tests and optional streaming refactors land, the RS group iteration remains
 6. **`header.to_bytes` + `encrypt_all_chunks`** — Per-chunk STREAM AEAD over compressed bytes with per-chunk AAD and nonce derivation (`crypto::stream`).
 7. **`layout_shards_with_rs`** — Interleave parity shards per group for on-disk layout.
 8. **`recovery::checksum::build_checksum_table`** — CRC-32C per shard (accidental damage hint only).
-9. **`container::write_atomic`** — Temp file + rename for atomic visible vault.
+9. **`container::write_atomic`** — Temp file (`*.lurpax.partial`) created exclusively (**`create_new`**, mode **0600** on Unix), full payload + fsync, then **`rename`** to the final path.
 
 ### Open (detailed)
 

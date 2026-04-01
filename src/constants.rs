@@ -26,8 +26,11 @@ pub const DEFAULT_ARGON2_PARALLELISM: u32 = 4;
 /// Minimum Argon2id memory (KiB) accepted on open (256 MiB).
 pub const MIN_ARGON2_MEM_KIB: u32 = 262_144;
 
-/// Maximum Argon2id memory (KiB) accepted on open (1 GiB).
-pub const MAX_ARGON2_MEM_KIB: u32 = 1_048_576;
+/// Maximum Argon2id memory (KiB) accepted on open (256 MiB; same as the default).
+///
+/// Capped at that value so a malicious header cannot force a larger Argon2 allocation
+/// before key-commitment verification (CWE-770).
+pub const MAX_ARGON2_MEM_KIB: u32 = 262_144;
 
 /// Minimum Argon2id time cost accepted on open.
 pub const MIN_ARGON2_ITERATIONS: u32 = 3;
