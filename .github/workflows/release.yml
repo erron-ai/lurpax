@@ -163,7 +163,6 @@ jobs:
         env:
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REF_NAME: ${{ env.RELEASE_TAG }}
         run: |
           set -euo pipefail
           g="${{ secrets.GH_TOKEN }}"
@@ -173,4 +172,4 @@ jobs:
             echo "::notice::Add repository secret GH_TOKEN or HOMEBREW_TAP_TOKEN to automate the Homebrew tap."
             exit 0
           fi
-          bash scripts/push_homebrew_tap.sh "${GITHUB_REF_NAME}"
+          bash scripts/push_homebrew_tap.sh "${RELEASE_TAG}"
