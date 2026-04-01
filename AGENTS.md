@@ -65,6 +65,29 @@ Run: `cargo test` (and integration tests as needed).
 | [`.github/workflows/homebrew-tap.yml`](.github/workflows/homebrew-tap.yml) / [`tag-release-on-main.yml`](.github/workflows/tag-release-on-main.yml) | Tap and tagging. |
 | [`.github/dependabot.yml`](.github/dependabot.yml) | Dependency updates. |
 
+### Release from a merged PR (fully automated)
+
+After you configure secrets below, this is the only manual step: **merge a PR to `main` that bumps `package.version` in [`Cargo.toml`](Cargo.toml)** to a version that does not already have a `v…` tag on GitHub.
+
+1. **Push to `main`** (including merge) runs [`tag-release-on-main.yml`](.github/workflows/tag-release-on-main.yml): creates `v{version}` from `Cargo.toml` and pushes it with **`GH_TOKEN`** (required).
+2. That **tag push** runs [`release.yml`](.github/workflows/release.yml): builds, GitHub Release, optional crates.io, then updates the Homebrew tap formula.
+
+If `v{version}` already exists, the tag job skips (no duplicate release). **crates.io** only publishes if `CARGO_REGISTRY_TOKEN` is set (otherwise that step is skipped by design).
+
+### Release-related repository secrets
+
+| Secret | Required for |
+|--------|----------------|
+| **`GH_TOKEN`** | **Tagging** ([`tag-release-on-main.yml`](.github/workflows/tag-release-on-main.yml)): PAT with **contents:write** on this repo so `git push` of tags is not performed as `GITHUB_TOKEN` (which does not trigger [`release.yml`](.github/workflows/release.yml)). For **Homebrew**, the same PAT must be able to **push** to the tap repo (`owner/homebrew-tap` or [`HOMEBREW_TAP_REPO`](.github/workflows/release.yml)), or set **`HOMEBREW_TAP_TOKEN`** for the tap only. Classic PAT: `repo` scope. Fine-grained: Contents Read and write on **both** repos. |
+| `HOMEBREW_TAP_TOKEN` | Optional alternative to `GH_TOKEN` for tap pushes only (see `release.yml`). |
+| `CARGO_REGISTRY_TOKEN` | Optional; [`release.yml`](.github/workflows/release.yml) skips `cargo publish` if unset. |
+
+### Release-related repository variables
+
+| Variable | Role |
+|----------|------|
+| `HOMEBREW_TAP_REPO` | Optional; default is `owner/homebrew-tap` (see [`scripts/push_homebrew_tap.sh`](scripts/push_homebrew_tap.sh)). |
+
 ## Build output
 
 `target/` is Cargo output (ignored in git). Do not treat it as source.
