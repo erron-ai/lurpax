@@ -4,8 +4,6 @@
 #
 # Env:
 #   TAP_PUSH_TOKEN or HOMEBREW_TAP_TOKEN — PAT with contents:write on the tap repo
-#   GITHUB_TOKEN — optional; in Actions, used to fetch checksums when LURPAX_SLUG matches
-#     GITHUB_REPOSITORY (private release assets)
 #   LURPAX_REPO — owner/name (default: GITHUB_REPOSITORY or origin remote)
 #   HOMEBREW_TAP_REPO or TAP_REPO — tap owner/name (default: <lurpax-owner>/homebrew-tap)
 set -euo pipefail
@@ -50,6 +48,7 @@ TAP_SLUG="${HOMEBREW_TAP_REPO:-${TAP_REPO:-${OWNER}/homebrew-tap}}"
 
 VER="${TAG#v}"
 BASE="https://github.com/${LURPAX_SLUG}/releases/download/${TAG}"
+
 
 RELEASE_FETCH_TOKEN="${TOKEN}"
 if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
