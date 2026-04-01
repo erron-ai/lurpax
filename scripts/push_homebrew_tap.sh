@@ -4,11 +4,17 @@
 #
 # Env:
 #   TAP_PUSH_TOKEN or HOMEBREW_TAP_TOKEN — PAT with contents:write on the tap repo
+#   GITHUB_TOKEN — optional; in Actions, used to fetch checksums when LURPAX_SLUG matches
+#     GITHUB_REPOSITORY (private release assets)
 #   LURPAX_REPO — owner/name (default: GITHUB_REPOSITORY or origin remote)
 #   HOMEBREW_TAP_REPO or TAP_REPO — tap owner/name (default: <lurpax-owner>/homebrew-tap)
 set -euo pipefail
 
 TAG="${1:?usage: $0 v0.1.0}"
+if [[ ! "${TAG}" =~ ^v[0-9] ]]; then
+  printf 'error: TAG must be a release tag like v0.7.0 (got %q); branch refs such as main are invalid\n' "${TAG}" >&2
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -45,6 +51,20 @@ TAP_SLUG="${HOMEBREW_TAP_REPO:-${TAP_REPO:-${OWNER}/homebrew-tap}}"
 VER="${TAG#v}"
 BASE="https://github.com/${LURPAX_SLUG}/releases/download/${TAG}"
 
+RELEASE_FETCH_TOKEN="${TOKEN}"
+if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+  _l="$(printf '%s\n' "${LURPAX_SLUG}" | tr '[:upper:]' '[:lower:]')"
+  _g="$(printf '%s\n' "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+  if [ "${_l}" = "${_g}" ]; then
+    RELEASE_FETCH_TOKEN="${GITHUB_TOKEN}"
+  fi
+fi
+unset _l _g
+
+curl_release_asset() {
+  curl -fsSL -H "Authorization: Bearer ${RELEASE_FETCH_TOKEN}" "$1"
+}
+
 targets=(
   x86_64-apple-darwin
   aarch64-apple-darwin
@@ -53,7 +73,11 @@ targets=(
 )
 shas=()
 for t in "${targets[@]}"; do
-  sum="$(curl -fsSL "${BASE}/lurpax-${TAG}-${t}.tar.gz.sha256" | awk '{print $1}')"
+  url="${BASE}/lurpax-${TAG}-${t}.tar.gz.sha256"
+  if ! sum="$(curl_release_asset "${url}" | awk '{print $1}')"; then
+    printf 'error: failed to fetch checksum (private repo? wrong tag? missing asset?): %s\n' "${url}" >&2
+    exit 22
+  fi
   shas+=("${sum}")
 done
 
