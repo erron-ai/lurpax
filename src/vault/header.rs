@@ -1,14 +1,14 @@
 //! Hand-rolled little-endian header serialization (no bincode).
 
 use crate::constants::{
-    CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, KDF_ARGON2ID, MAX_ARGON2_ITERATIONS,
-    MAX_ARGON2_MEM_KIB, MAX_ARGON2_PARALLELISM, MAX_HEADER_BODY_LEN, MIN_ARGON2_ITERATIONS,
-    MIN_ARGON2_MEM_KIB, MIN_ARGON2_PARALLELISM, RS_DATA_SHARDS_PER_GROUP,
+    CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, HEADER_VERSION_V2, KDF_ARGON2ID,
+    MAX_ARGON2_ITERATIONS, MAX_ARGON2_MEM_KIB, MAX_ARGON2_PARALLELISM, MAX_HEADER_BODY_LEN,
+    MIN_ARGON2_ITERATIONS, MIN_ARGON2_MEM_KIB, MIN_ARGON2_PARALLELISM, RS_DATA_SHARDS_PER_GROUP,
     RS_PARITY_SHARDS_PER_GROUP,
 };
 use crate::errors::{LurpaxError, Result};
 
-/// On-disk header fields for v1 (see `docs/FORMAT.md`).
+/// On-disk header fields for v1 and v2 (see `docs/FORMAT.md`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Header {
     /// Format version (`1` for v1).
@@ -41,8 +41,14 @@ pub struct Header {
     pub yubi_required: bool,
     /// YubiKey slot (`1` or `2`) when `yubi_required`.
     pub yubi_slot: u8,
-    /// Stored challenge for YubiKey (zeroed when not used).
+    /// Stored challenge for YubiKey on **v1** Yubi vaults only; must be zero on v2.
     pub yubi_challenge: [u8; 32],
+    /// Argon2id salt for password-only wrap of the YubiKey challenge (**v2** Yubi vaults).
+    pub yubi_wrap_salt: [u8; 32],
+    /// XChaCha20-Poly1305 nonce for the wrapped challenge (**v2**).
+    pub yubi_chal_nonce: [u8; 24],
+    /// Ciphertext + tag for the 32-byte challenge (**v2**).
+    pub yubi_chal_ciphertext: [u8; 48],
 }
 
 impl Header {
@@ -76,7 +82,15 @@ impl Header {
         v.extend_from_slice(&self.rs_parity_shards_per_group.to_le_bytes());
         v.push(u8::from(self.yubi_required));
         v.push(self.yubi_slot);
-        v.extend_from_slice(&self.yubi_challenge);
+        if self.version == HEADER_VERSION_V1 {
+            v.extend_from_slice(&self.yubi_challenge);
+        } else if self.version == HEADER_VERSION_V2 {
+            v.extend_from_slice(&self.yubi_wrap_salt);
+            v.extend_from_slice(&self.yubi_chal_nonce);
+            v.extend_from_slice(&self.yubi_chal_ciphertext);
+        } else {
+            v.extend_from_slice(&self.yubi_challenge);
+        }
         v
     }
 
@@ -101,6 +115,11 @@ impl Header {
                 .try_into()
                 .map_err(|_| LurpaxError::InvalidVault("version".into()))?,
         );
+        if ver != HEADER_VERSION_V1 && ver != HEADER_VERSION_V2 {
+            return Err(LurpaxError::InvalidVault(format!(
+                "unsupported version {ver}"
+            )));
+        }
         let kdf = *take!(1)
             .first()
             .ok_or_else(|| LurpaxError::InvalidVault("kdf".into()))?;
@@ -159,9 +178,24 @@ impl Header {
         let yubi_slot = *take!(1)
             .first()
             .ok_or_else(|| LurpaxError::InvalidVault("yubi_slot".into()))?;
-        let yubi_challenge: [u8; 32] = take!(32)
-            .try_into()
-            .map_err(|_| LurpaxError::InvalidVault("yubi_challenge".into()))?;
+        let (yubi_challenge, yubi_wrap_salt, yubi_chal_nonce, yubi_chal_ciphertext) =
+            if ver == HEADER_VERSION_V1 {
+                let c: [u8; 32] = take!(32)
+                    .try_into()
+                    .map_err(|_| LurpaxError::InvalidVault("yubi_challenge".into()))?;
+                (c, [0u8; 32], [0u8; 24], [0u8; 48])
+            } else {
+                let ws: [u8; 32] = take!(32)
+                    .try_into()
+                    .map_err(|_| LurpaxError::InvalidVault("yubi_wrap_salt".into()))?;
+                let nn: [u8; 24] = take!(24)
+                    .try_into()
+                    .map_err(|_| LurpaxError::InvalidVault("yubi_chal_nonce".into()))?;
+                let ct: [u8; 48] = take!(48)
+                    .try_into()
+                    .map_err(|_| LurpaxError::InvalidVault("yubi_chal_ciphertext".into()))?;
+                ([0u8; 32], ws, nn, ct)
+            };
 
         // AUDIT: exact consumption prevents parser confusion from appended data
         if off != buf.len() {
@@ -187,6 +221,9 @@ impl Header {
             yubi_required: yubi_req != 0,
             yubi_slot,
             yubi_challenge,
+            yubi_wrap_salt,
+            yubi_chal_nonce,
+            yubi_chal_ciphertext,
         };
         h.validate_schema()?;
         Ok(h)
@@ -194,7 +231,7 @@ impl Header {
 
     /// Validates version-1 wire schema and policy bounds for `open` / `verify`.
     pub fn validate_schema(&self) -> Result<()> {
-        if self.version != HEADER_VERSION_V1 {
+        if self.version != HEADER_VERSION_V1 && self.version != HEADER_VERSION_V2 {
             return Err(LurpaxError::InvalidVault(format!(
                 "unsupported version {}",
                 self.version
@@ -245,6 +282,36 @@ impl Header {
                     "yubi_challenge must be zeroed".into(),
                 ));
             }
+        }
+        match self.version {
+            HEADER_VERSION_V1 => {
+                if self.yubi_wrap_salt != [0u8; 32]
+                    || self.yubi_chal_nonce != [0u8; 24]
+                    || self.yubi_chal_ciphertext != [0u8; 48]
+                {
+                    return Err(LurpaxError::InvalidVault(
+                        "v1 header must zero yubi wrap fields".into(),
+                    ));
+                }
+            }
+            HEADER_VERSION_V2 => {
+                if !self.yubi_required {
+                    return Err(LurpaxError::InvalidVault(
+                        "header v2 requires YubiKey".into(),
+                    ));
+                }
+                if self.yubi_challenge != [0u8; 32] {
+                    return Err(LurpaxError::InvalidVault(
+                        "v2 must not store plaintext yubi_challenge".into(),
+                    ));
+                }
+                if self.yubi_wrap_salt == [0u8; 32] {
+                    return Err(LurpaxError::InvalidVault(
+                        "v2 yubi wrap salt invalid".into(),
+                    ));
+                }
+            }
+            _ => {}
         }
         let last = last_chunk_plaintext_size(self)?;
         let full = u64::from(self.chunk_plaintext_size);

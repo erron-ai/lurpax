@@ -8,12 +8,12 @@ use std::sync::atomic::AtomicBool;
 
 use std::ops::Deref;
 
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::archive::{ArchiveLimits, extract_tar, tar_input};
 use crate::constants::{
-    CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, KDF_ARGON2ID, RS_DATA_SHARDS_PER_GROUP,
-    RS_PARITY_SHARDS_PER_GROUP,
+    CHUNK_PLAINTEXT_SIZE, HEADER_VERSION_V1, HEADER_VERSION_V2, KDF_ARGON2ID,
+    RS_DATA_SHARDS_PER_GROUP, RS_PARITY_SHARDS_PER_GROUP,
 };
 use crate::crypto::{
     DerivedSubkeys, commitment_hmac, compose_ikm, decrypt_single_chunk, derive_subkeys,
@@ -241,21 +241,45 @@ impl VaultService {
         let base_nonce_arr: [u8; 24] = random24()?;
         let yubi_required = yubi_slot.is_some();
         let slot = yubi_slot.unwrap_or(0);
-        let mut yubi_challenge = [0u8; 32];
-        let yubi_resp: Option<Zeroizing<Vec<u8>>> = if yubi_required {
+        let (
+            yubi_resp,
+            hdr_version,
+            yubi_challenge_field,
+            yubi_wrap_salt,
+            yubi_chal_nonce,
+            yubi_chal_ciphertext,
+        ) = if yubi_required {
+            let mut yubi_challenge = [0u8; 32];
             getrandom::getrandom(&mut yubi_challenge)
                 .map_err(|_| LurpaxError::RandomUnavailable)?;
+            let (ws, nn, ct) =
+                crate::crypto::yubi_challenge_wrap::seal_challenge(password, &yubi_challenge)?;
             let y =
                 yubi.ok_or_else(|| LurpaxError::YubiKey("internal: missing yubi port".into()))?;
             let r = y.otp_calculate(slot, &yubi_challenge)?;
-            Some(Zeroizing::new(Vec::from(*r)))
+            yubi_challenge.zeroize();
+            (
+                Some(Zeroizing::new(Vec::from(*r))),
+                HEADER_VERSION_V2,
+                [0u8; 32],
+                ws,
+                nn,
+                ct,
+            )
         } else {
-            None
+            (
+                None,
+                HEADER_VERSION_V1,
+                [0u8; 32],
+                [0u8; 32],
+                [0u8; 24],
+                [0u8; 48],
+            )
         };
         let yubi_slice = yubi_resp.as_ref().map(|b| b.as_slice());
         let (mem, it, par) = Header::default_argon2_params();
         let mut header = Header {
-            version: HEADER_VERSION_V1,
+            version: hdr_version,
             kdf_algorithm: KDF_ARGON2ID,
             argon2_mem_kib: mem,
             argon2_iterations: it,
@@ -270,7 +294,10 @@ impl VaultService {
             rs_parity_shards_per_group: RS_PARITY_SHARDS_PER_GROUP,
             yubi_required,
             yubi_slot: slot,
-            yubi_challenge,
+            yubi_challenge: yubi_challenge_field,
+            yubi_wrap_salt,
+            yubi_chal_nonce,
+            yubi_chal_ciphertext,
         };
         header.validate_schema()?;
         let ikm = compose_ikm(password, yubi_slice)?;
@@ -293,9 +320,8 @@ impl VaultService {
         check_interrupted(term.as_ref())?;
         let enc_shards = encrypt_all_chunks(&header, &header_body, &compressed, enc_key.deref())?;
         drop(enc_key);
-        let plain_shards: Vec<Vec<u8>> = enc_shards.into_iter().map(|z| (*z).clone()).collect();
         check_interrupted(term.as_ref())?;
-        let disk_shards = layout_shards_with_rs(plain_shards, &header)?;
+        let disk_shards = layout_shards_with_rs(enc_shards, &header)?;
         let crc = crate::recovery::checksum::build_checksum_table(&disk_shards);
         write_atomic(output, &header, &header_body, &disk_shards, &crc)?;
         Ok(())
@@ -346,7 +372,19 @@ impl VaultService {
         let yubi_bytes: Option<Zeroizing<Vec<u8>>> = if header.yubi_required {
             let y =
                 yubi.ok_or_else(|| LurpaxError::YubiKey("YubiKey required for this vault".into()))?;
-            let r = y.otp_calculate(header.yubi_slot, &header.yubi_challenge)?;
+            let chal = match header.version {
+                HEADER_VERSION_V1 => header.yubi_challenge,
+                HEADER_VERSION_V2 => {
+                    let z = crate::crypto::yubi_challenge_wrap::unwrap_challenge(password, &header)?;
+                    *z
+                }
+                _ => {
+                    return Err(LurpaxError::InvalidVault(
+                        "unsupported header version".into(),
+                    ));
+                }
+            };
+            let r = y.otp_calculate(header.yubi_slot, &chal)?;
             Some(Zeroizing::new(Vec::from(*r)))
         } else {
             None
@@ -524,6 +562,9 @@ mod shard_layout_tests {
             yubi_required: false,
             yubi_slot: 0,
             yubi_challenge: [0u8; 32],
+            yubi_wrap_salt: [0u8; 32],
+            yubi_chal_nonce: [0u8; 24],
+            yubi_chal_ciphertext: [0u8; 48],
         }
     }
 

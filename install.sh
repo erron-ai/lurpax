@@ -100,6 +100,21 @@ main() {
 
     curl -fsSL "$url" -o "${tmpdir}/${name}.tar.gz" \
         || err "failed to download ${url}. If the tag exists but install still fails, the release workflow may not have published binaries yet (GitHub Release + assets), or pick another tag: $0 TAG"
+
+    info "verifying SHA-256 checksum..."
+    curl -fsSL "https://github.com/${REPO}/releases/download/${tag}/${name}.tar.gz.sha256" \
+        -o "${tmpdir}/${name}.tar.gz.sha256" \
+        || err "failed to download ${name}.tar.gz.sha256 (release assets must include .sha256 sidecars)"
+    expected="$(awk '{print $1}' "${tmpdir}/${name}.tar.gz.sha256")"
+    [[ -n "${expected}" && "${#expected}" -eq 64 ]] || err "invalid checksum file from release"
+    if command -v shasum >/dev/null 2>&1; then
+        actual="$(shasum -a 256 "${tmpdir}/${name}.tar.gz" | awk '{print $1}')"
+    else
+        actual="$(sha256sum "${tmpdir}/${name}.tar.gz" | awk '{print $1}')"
+    fi
+    [[ "${actual}" == "${expected}" ]] \
+        || err "SHA-256 mismatch for ${name}.tar.gz (expected ${expected}, got ${actual})"
+
     tar xzf "${tmpdir}/${name}.tar.gz" -C "$tmpdir"
 
     info "installing to ${INSTALL_DIR}/lurpax..."

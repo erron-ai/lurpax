@@ -4,6 +4,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+use zeroize::{Zeroize, Zeroizing};
+
 use crate::constants::MAGIC;
 use crate::errors::{LurpaxError, Result};
 use crate::vault::header::{
@@ -194,7 +196,13 @@ pub fn write_atomic(
 }
 
 /// Expands flat `data_shards` into on-disk shard list with RS parity per group.
-pub fn layout_shards_with_rs(data_shards: Vec<Vec<u8>>, header: &Header) -> Result<Vec<Vec<u8>>> {
+///
+/// Clones ciphertext only per RS group into short-lived plain buffers; those are zeroized
+/// after each encode (no full-vault `Vec<Vec<u8>>` duplicate of all shards).
+pub fn layout_shards_with_rs(
+    data_shards: Vec<Zeroizing<Vec<u8>>>,
+    header: &Header,
+) -> Result<Vec<Vec<u8>>> {
     use crate::recovery::fec::encode_rs_group;
 
     let d = header.rs_data_shards_per_group as usize;
@@ -202,10 +210,18 @@ pub fn layout_shards_with_rs(data_shards: Vec<Vec<u8>>, header: &Header) -> Resu
     let n = usize::try_from(header.chunk_count).map_err(|_| LurpaxError::Overflow)?;
     let mut out = Vec::new();
     let mut i = 0usize;
+    let mut cursor = 0usize;
     while i < n {
         let k = (n - i).min(d);
-        let group: Vec<Vec<u8>> = data_shards[i..i + k].to_vec();
-        let enc = encode_rs_group(&group, p)?;
+        let mut group_plain: Vec<Vec<u8>> = data_shards[cursor..cursor + k]
+            .iter()
+            .map(|z| z.as_slice().to_vec())
+            .collect();
+        cursor += k;
+        let enc = encode_rs_group(&group_plain, p)?;
+        for row in &mut group_plain {
+            row.zeroize();
+        }
         out.extend(enc);
         i += k;
     }

@@ -2,7 +2,10 @@
 target/
 **/*.rs.bk
 .cargo/credentials.toml
-example/
+# example/ — ignore local junk; keep checked-in e2e helper
+example/*
+!example/.gitkeep
+!example/e2e_corruption_test.sh
 
 # Local env and secrets (never commit)
 .env
@@ -22,8 +25,6 @@ id_ed25519
 *.lurpax
 docs/yubikey-demo.cast
 docs/*yubikey*demo*.sh
-example/pwd.txt
-example/data/
 
 # Python
 __pycache__/

@@ -15,7 +15,7 @@ The following are stored in plaintext (header + framing) and are readable by any
 - Argon2id parameters (memory, iterations, parallelism)
 - Salt, chunk layout, RS parameters, compressed payload size
 - Whether a YubiKey was used and which slot
-- The **YubiKey challenge bytes** stored in the header (response is not stored)
+- **v1 YubiKey vaults:** the challenge bytes appear in the header in plaintext. **v2** (new creates with `--yubikey-slot`): only an Argon2/XChaCha-wrapped ciphertext of the challenge; the raw challenge is not stored on disk (response is never stored)
 - Approximate compression ratio via `compressed_payload_size`
 
 This is inherent: the implementation must parse metadata before decryption.

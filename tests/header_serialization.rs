@@ -2,8 +2,8 @@
 
 use lurpax::constants::{
     CHUNK_PLAINTEXT_SIZE, DEFAULT_ARGON2_ITERATIONS, DEFAULT_ARGON2_MEM_KIB,
-    DEFAULT_ARGON2_PARALLELISM, HEADER_VERSION_V1, KDF_ARGON2ID, RS_DATA_SHARDS_PER_GROUP,
-    RS_PARITY_SHARDS_PER_GROUP,
+    DEFAULT_ARGON2_PARALLELISM, HEADER_VERSION_V1, HEADER_VERSION_V2, KDF_ARGON2ID,
+    RS_DATA_SHARDS_PER_GROUP, RS_PARITY_SHARDS_PER_GROUP,
 };
 use lurpax::vault::Header;
 
@@ -26,6 +26,9 @@ fn header_roundtrip() {
         yubi_required: false,
         yubi_slot: 0,
         yubi_challenge: [0u8; 32],
+        yubi_wrap_salt: [0u8; 32],
+        yubi_chal_nonce: [0u8; 24],
+        yubi_chal_ciphertext: [0u8; 48],
     };
     h.validate_schema().unwrap();
     let b = h.to_bytes();
@@ -51,7 +54,40 @@ fn valid_header() -> Header {
         yubi_required: false,
         yubi_slot: 0,
         yubi_challenge: [0u8; 32],
+        yubi_wrap_salt: [0u8; 32],
+        yubi_chal_nonce: [0u8; 24],
+        yubi_chal_ciphertext: [0u8; 48],
     }
+}
+
+#[test]
+fn header_v2_yubi_wire_roundtrip() {
+    let h = Header {
+        version: HEADER_VERSION_V2,
+        kdf_algorithm: KDF_ARGON2ID,
+        argon2_mem_kib: DEFAULT_ARGON2_MEM_KIB,
+        argon2_iterations: DEFAULT_ARGON2_ITERATIONS,
+        argon2_parallelism: DEFAULT_ARGON2_PARALLELISM,
+        salt: [7u8; 32],
+        base_nonce: [8u8; 24],
+        key_commitment: [9u8; 32],
+        chunk_plaintext_size: CHUNK_PLAINTEXT_SIZE,
+        chunk_count: 3,
+        compressed_payload_size: CHUNK_PLAINTEXT_SIZE as u64 * 2 + 100,
+        rs_data_shards_per_group: RS_DATA_SHARDS_PER_GROUP,
+        rs_parity_shards_per_group: RS_PARITY_SHARDS_PER_GROUP,
+        yubi_required: true,
+        yubi_slot: 2,
+        yubi_challenge: [0u8; 32],
+        yubi_wrap_salt: [0xabu8; 32],
+        yubi_chal_nonce: [0xbcu8; 24],
+        yubi_chal_ciphertext: [0xcdu8; 48],
+    };
+    h.validate_schema().unwrap();
+    let b = h.to_bytes();
+    assert_eq!(b.len(), 233);
+    let h2 = Header::from_bytes_exact(&b).unwrap();
+    assert_eq!(h, h2);
 }
 
 #[test]

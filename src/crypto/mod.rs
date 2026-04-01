@@ -3,6 +3,7 @@
 pub mod encryption;
 pub mod kdf;
 pub mod stream;
+pub mod yubi_challenge_wrap;
 
 pub use encryption::{commitment_hmac, verify_commitment};
 pub use kdf::{DerivedSubkeys, compose_ikm, derive_subkeys, zeroize_master};

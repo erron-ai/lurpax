@@ -5,8 +5,11 @@
 /// Five-byte on-disk magic identifying a Lurpax vault (ASCII `LURPX`).
 pub const MAGIC: &[u8; 5] = b"LURPX";
 
-/// Format `version` field in the header (single source of truth for v1).
+/// Format `version` field in the header (v1 wire layout).
 pub const HEADER_VERSION_V1: u16 = 1;
+
+/// Header format with password-wrapped YubiKey challenge (no plaintext challenge on disk).
+pub const HEADER_VERSION_V2: u16 = 2;
 
 /// `kdf_algorithm` value for Argon2id (only supported KDF in v1).
 pub const KDF_ARGON2ID: u8 = 1;
@@ -40,6 +43,15 @@ pub const MAX_ARGON2_PARALLELISM: u32 = 16;
 
 /// Argon2id output size feeding HKDF (never used directly as AEAD key).
 pub const ARGON2_OUTPUT_LEN: usize = 64;
+
+/// Argon2id parameters for the YubiKey challenge wrap subkey (password-only IKM).
+pub const YUBI_CHALLENGE_WRAP_MEM_KIB: u32 = 65_536;
+
+/// Time cost for YubiKey challenge wrap Argon2id.
+pub const YUBI_CHALLENGE_WRAP_ITERATIONS: u32 = 2;
+
+/// Parallelism for YubiKey challenge wrap Argon2id.
+pub const YUBI_CHALLENGE_WRAP_PARALLELISM: u32 = 4;
 
 /// Plaintext chunk size for STREAM (compressed payload); v1 fixed size.
 pub const CHUNK_PLAINTEXT_SIZE: u32 = 65_536;
