@@ -57,11 +57,7 @@ pub fn argon2_derive_master(
 }
 
 /// Derives a 32-byte XChaCha20-Poly1305 key for password-wrapped YubiKey challenge bytes (header v2).
-pub fn argon2_derive_wrap_key(
-    ikm: &[u8],
-    salt: &[u8; 32],
-    key_out: &mut [u8; 32],
-) -> Result<()> {
+pub fn argon2_derive_wrap_key(ikm: &[u8], salt: &[u8; 32], key_out: &mut [u8; 32]) -> Result<()> {
     let params = Params::new(
         YUBI_CHALLENGE_WRAP_MEM_KIB,
         YUBI_CHALLENGE_WRAP_ITERATIONS,

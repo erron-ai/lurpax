@@ -375,7 +375,8 @@ impl VaultService {
             let chal = match header.version {
                 HEADER_VERSION_V1 => header.yubi_challenge,
                 HEADER_VERSION_V2 => {
-                    let z = crate::crypto::yubi_challenge_wrap::unwrap_challenge(password, &header)?;
+                    let z =
+                        crate::crypto::yubi_challenge_wrap::unwrap_challenge(password, &header)?;
                     *z
                 }
                 _ => {

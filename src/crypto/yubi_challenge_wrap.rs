@@ -33,7 +33,9 @@ pub fn seal_challenge(
         )
         .map_err(|_| LurpaxError::Crypto("challenge wrap encrypt".into()))?;
     if ct.len() != 48 {
-        return Err(LurpaxError::Crypto("challenge wrap ciphertext length".into()));
+        return Err(LurpaxError::Crypto(
+            "challenge wrap ciphertext length".into(),
+        ));
     }
     let mut out_ct = [0u8; 48];
     out_ct.copy_from_slice(&ct);
