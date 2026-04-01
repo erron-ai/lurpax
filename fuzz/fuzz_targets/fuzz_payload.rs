@@ -12,7 +12,7 @@ fuzz_target!(|data: &[u8]| {
     if data.len() < 9 {
         return;
     }
-    if data[..5] != MAGIC {
+    if &data[..5] != MAGIC {
         return;
     }
     let nl = u32::from_le_bytes(data[5..9].try_into().unwrap());
