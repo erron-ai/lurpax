@@ -21,7 +21,7 @@ pub fn seal_challenge(
     getrandom::getrandom(&mut nonce).map_err(|_| LurpaxError::RandomUnavailable)?;
     let ikm = compose_ikm(password, None)?;
     let mut key = Zeroizing::new([0u8; 32]);
-    argon2_derive_wrap_key(ikm.as_ref(), &wrap_salt, &mut *key)?;
+    argon2_derive_wrap_key(ikm.as_ref(), &wrap_salt, &mut key)?;
     let cipher = XChaCha20Poly1305::new(Key::from_slice(key.as_ref()));
     let ct = cipher
         .encrypt(
@@ -46,7 +46,7 @@ pub fn seal_challenge(
 pub fn unwrap_challenge(password: &[u8], header: &Header) -> Result<Zeroizing<[u8; 32]>> {
     let ikm = compose_ikm(password, None)?;
     let mut key = Zeroizing::new([0u8; 32]);
-    argon2_derive_wrap_key(ikm.as_ref(), &header.yubi_wrap_salt, &mut *key)?;
+    argon2_derive_wrap_key(ikm.as_ref(), &header.yubi_wrap_salt, &mut key)?;
     let cipher = XChaCha20Poly1305::new(Key::from_slice(key.as_ref()));
     let pt = cipher
         .decrypt(
