@@ -2,8 +2,35 @@
 set -euo pipefail
 
 # Prefer known system paths so a hostile PATH cannot substitute curl/tar/sha tools (CWE-426).
-CURL="${CURL:-/usr/bin/curl}"
-TAR="${TAR:-/bin/tar}"
+# Probe common locations: Linux often uses /bin/tar; macOS uses /usr/bin/tar and /usr/bin/shasum.
+_first_executable() {
+    local p
+    for p in "$@"; do
+        [ -x "$p" ] && {
+            printf '%s\n' "$p"
+            return 0
+        }
+    done
+    return 1
+}
+
+CURL="${CURL:-}"
+if [ -z "$CURL" ]; then
+    CURL="$(_first_executable /usr/bin/curl /bin/curl)" || CURL=/usr/bin/curl
+fi
+
+TAR="${TAR:-}"
+if [ -z "$TAR" ]; then
+    TAR="$(_first_executable /bin/tar /usr/bin/tar)" || TAR=/bin/tar
+fi
+
+# GNU: sha256sum; macOS/BSD: shasum (usually /usr/bin/shasum; older macOS used /usr/sbin/shasum).
+SHA256="${SHA256:-}"
+if [ -z "$SHA256" ]; then
+    SHA256="$(
+        _first_executable /usr/bin/sha256sum /usr/bin/shasum /usr/sbin/shasum
+    )" || SHA256=/usr/bin/sha256sum
+fi
 
 REPO="${LURPAX_REPO:-erron-ai/lurpax}"
 INSTALL_DIR="${LURPAX_INSTALL_DIR:-/usr/local/bin}"
@@ -14,23 +41,20 @@ err()   { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 require_tools() {
     [ -x "$CURL" ] || err "curl not found or not executable at $CURL (set CURL to a trusted path)"
     [ -x "$TAR" ] || err "tar not found or not executable at $TAR (set TAR to a trusted path)"
-    if [ -x /usr/bin/sha256sum ]; then
-        :
-    elif [ -x /usr/sbin/shasum ]; then
-        :
-    else
-        err "need SHA-256 at /usr/bin/sha256sum or /usr/sbin/shasum"
-    fi
+    [ -x "$SHA256" ] || err "SHA-256 tool not found at $SHA256 (set SHA256 to a trusted sha256sum or shasum)"
+    case "${SHA256##*/}" in
+        sha256sum|shasum) ;;
+        *) err "unsupported SHA-256 tool ${SHA256} (expected sha256sum or shasum)" ;;
+    esac
 }
 
 # Print lowercase hex SHA-256 of file $1 (no newline in output).
 sha256_hex_file() {
     local f="$1"
-    if [ -x /usr/bin/sha256sum ]; then
-        /usr/bin/sha256sum "$f" | awk '{print $1}'
-    else
-        /usr/sbin/shasum -a 256 "$f" | awk '{print $1}'
-    fi
+    case "${SHA256##*/}" in
+        sha256sum) "$SHA256" "$f" | awk '{print $1}' ;;
+        shasum) "$SHA256" -a 256 "$f" | awk '{print $1}' ;;
+    esac
 }
 
 detect_target() {

@@ -8,6 +8,30 @@ import pathlib
 import re
 import sys
 
+# Homebrew's CurlDownloadStrategy chdirs into the archive when it contains exactly one
+# top-level directory (see brew Library/Homebrew/download_strategy.rb). The binary is
+# then ./lurpax, not lurpax-*/lurpax. Support both layouts.
+_INSTALL_BLOCK = """  def install
+    path = File.exist?("lurpax") ? "lurpax" : Dir["lurpax-*/lurpax"].first
+    odie "lurpax binary not found (expected lurpax or lurpax-*/lurpax in archive)" if path.nil?
+    bin.install path => "lurpax"
+  end"""
+
+
+def apply_install_block(text: str) -> str:
+    """Replace the formula `install` method with the layout-compatible block."""
+    text2, n = re.subn(
+        r"  def install\n.*?^  end\n",
+        _INSTALL_BLOCK + "\n",
+        text,
+        count=1,
+        flags=re.DOTALL | re.MULTILINE,
+    )
+    if n != 1:
+        print("error: could not replace install block", file=sys.stderr)
+        sys.exit(1)
+    return text2
+
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -79,6 +103,8 @@ def main() -> None:
             "github.com/erron-ai/lurpax",
             f"github.com/{args.github_slug}",
         )
+
+    text = apply_install_block(text)
 
     args.formula.write_text(text, encoding="utf-8")
 
