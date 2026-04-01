@@ -4,13 +4,15 @@
 #
 # Env:
 #   TAP_PUSH_TOKEN or HOMEBREW_TAP_TOKEN — PAT with contents:write on the tap repo
-#   GITHUB_TOKEN — optional; in Actions, used to fetch release checksums when LURPAX_SLUG matches
-#     GITHUB_REPOSITORY so the PAT does not need read access to the lurpax repo
 #   LURPAX_REPO — owner/name (default: GITHUB_REPOSITORY or origin remote)
 #   HOMEBREW_TAP_REPO or TAP_REPO — tap owner/name (default: <lurpax-owner>/homebrew-tap)
 set -euo pipefail
 
 TAG="${1:?usage: $0 v0.1.0}"
+if [[ ! "${TAG}" =~ ^v[0-9] ]]; then
+  printf 'error: TAG must be a release tag like v0.7.0 (got %q); branch refs such as main are invalid\n' "${TAG}" >&2
+  exit 1
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -47,8 +49,7 @@ TAP_SLUG="${HOMEBREW_TAP_REPO:-${TAP_REPO:-${OWNER}/homebrew-tap}}"
 VER="${TAG#v}"
 BASE="https://github.com/${LURPAX_SLUG}/releases/download/${TAG}"
 
-# Private repos return 404 without auth. Prefer Actions GITHUB_TOKEN when this job runs on the same repo
-# as LURPAX_SLUG so the tap PAT can be tap-only; otherwise use the tap PAT.
+
 RELEASE_FETCH_TOKEN="${TOKEN}"
 if [ -n "${GITHUB_TOKEN:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
   _l="$(printf '%s\n' "${LURPAX_SLUG}" | tr '[:upper:]' '[:lower:]')"

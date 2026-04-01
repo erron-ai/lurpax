@@ -12,9 +12,28 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  # Tag push: use ref_name. workflow_dispatch: use tag input only (do not fall back to branch ref_name).
+  RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
 
 jobs:
+  assert-release-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release tag
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          if [ -z "${TAG}" ]; then
+            echo "::error::Release tag is empty. For workflow dispatch, set the tag input (e.g. v0.7.0)."
+            exit 1
+          fi
+          if [[ ! "${TAG}" =~ ^v[0-9] ]]; then
+            echo "::error::Invalid release tag '${TAG}' (expected a version tag like v0.7.0, not a branch name)."
+            exit 1
+          fi
+
   build:
+    needs: assert-release-tag
     strategy:
       matrix:
         include:
@@ -36,7 +55,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', github.event.inputs.tag) || github.ref }}
+          ref: refs/tags/${{ env.RELEASE_TAG }}
 
       - uses: dtolnay/rust-toolchain@1.88.0
         with:
@@ -60,10 +79,8 @@ jobs:
 
       - name: Package
         shell: bash
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
         run: |
-          tag="${RELEASE_TAG}"
+          tag="${{ env.RELEASE_TAG }}"
           name="lurpax-${tag}-${{ matrix.target }}"
           mkdir "$name"
           cp "target/${{ matrix.target }}/release/lurpax" "$name/"
@@ -103,7 +120,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: |
             lurpax-*.tar.gz
@@ -120,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/tags/{0}', github.event.inputs.tag) || github.ref }}
+          ref: refs/tags/${{ env.RELEASE_TAG }}
       - uses: dtolnay/rust-toolchain@1.88.0
       - name: Publish to crates.io
         env:
@@ -146,7 +163,7 @@ jobs:
         env:
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REF_NAME: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.ref_name }}
+          GITHUB_REF_NAME: ${{ env.RELEASE_TAG }}
         run: |
           set -euo pipefail
           g="${{ secrets.GH_TOKEN }}"
