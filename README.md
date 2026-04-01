@@ -133,7 +133,7 @@ lurpax open --vault <path> --out-dir <dir> [options]
 | `--max-files <count>` | Limit number of extracted files |
 | `--max-file-size <bytes>` | Limit size of any single extracted file |
 
-If the vault was created with a YubiKey, have the same key inserted — the slot and challenge are stored in the vault header, so no extra flags are needed.
+If the vault was created with a YubiKey, have the same key inserted — the slot (and, on vaults from 0.10+, password-wrapped challenge material) are stored in the vault header, so no extra flags are needed.
 
 ### `verify`
 
@@ -222,7 +222,7 @@ Slot 2 should show `Challenge-response - HMAC-SHA1`.
 lurpax create --output vault.lurpax --input ./data --yubikey-slot 2
 ```
 
-You will be prompted for a password, then Lurpax issues a challenge to the key. Touch the key when it blinks. The slot number and challenge are stored in the vault header — you do not need to pass `--yubikey-slot` again when opening.
+You will be prompted for a password, then Lurpax issues a challenge to the key. Touch the key when it blinks. The slot and wrapped challenge ciphertext (0.10+) are stored in the vault header — you do not need to pass `--yubikey-slot` again when opening.
 
 **5. Open a vault — have the same YubiKey inserted:**
 

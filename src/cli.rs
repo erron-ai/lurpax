@@ -42,7 +42,7 @@ YUBIKEY SETUP:
 
   4. Open/decrypt — just have the same YubiKey inserted:
        lurpax open --vault vault.lurpax --out-dir ./restored
-     The vault header stores the slot and challenge; no extra flags needed.
+     The vault header stores the slot and wrapped challenge (v2) or legacy plaintext challenge (v1); no extra flags needed.
 
   ykman is found at /usr/bin/ykman, /usr/local/bin/ykman, or
   /opt/homebrew/bin/ykman. Override with LURPAX_YKMAN_PATH=/path/to/ykman
@@ -117,9 +117,6 @@ fn read_password_file(path: &std::path::Path) -> Result<Zeroizing<Vec<u8>>> {
         ));
     }
     let mut s = Zeroizing::new(fs::read(path)?);
-    if s.is_empty() {
-        return Err(LurpaxError::Password("password must not be empty".into()));
-    }
     if s.ends_with(b"\r\n") {
         let n = s.len();
         s.truncate(n - 2);
@@ -127,7 +124,11 @@ fn read_password_file(path: &std::path::Path) -> Result<Zeroizing<Vec<u8>>> {
         let n = s.len();
         s.truncate(n - 1);
     }
-    if s.is_empty() || s.len() > crate::constants::MAX_PASSWORD_LEN {
+    if s.is_empty() {
+        return Err(LurpaxError::Password("password must not be empty".into()));
+    }
+    if !(crate::constants::MIN_PASSWORD_LEN..=crate::constants::MAX_PASSWORD_LEN).contains(&s.len())
+    {
         return Err(LurpaxError::Password("password length invalid".into()));
     }
     Ok(s)

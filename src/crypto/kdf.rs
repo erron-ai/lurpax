@@ -7,6 +7,7 @@ use zeroize::{Zeroize, Zeroizing};
 
 use crate::constants::{
     ARGON2_OUTPUT_LEN, HKDF_INFO_COMMIT, HKDF_INFO_ENC, MAX_PASSWORD_LEN, MIN_PASSWORD_LEN,
+    YUBI_CHALLENGE_WRAP_ITERATIONS, YUBI_CHALLENGE_WRAP_MEM_KIB, YUBI_CHALLENGE_WRAP_PARALLELISM,
 };
 use crate::errors::{LurpaxError, Result};
 
@@ -52,6 +53,26 @@ pub fn argon2_derive_master(
     argon2
         .hash_password_into(ikm, salt, master_out)
         .map_err(|e: argon2::Error| LurpaxError::Crypto(format!("argon2: {e}")))?;
+    Ok(())
+}
+
+/// Derives a 32-byte XChaCha20-Poly1305 key for password-wrapped YubiKey challenge bytes (header v2).
+pub fn argon2_derive_wrap_key(
+    ikm: &[u8],
+    salt: &[u8; 32],
+    key_out: &mut [u8; 32],
+) -> Result<()> {
+    let params = Params::new(
+        YUBI_CHALLENGE_WRAP_MEM_KIB,
+        YUBI_CHALLENGE_WRAP_ITERATIONS,
+        YUBI_CHALLENGE_WRAP_PARALLELISM,
+        Some(32),
+    )
+    .map_err(|e| LurpaxError::Crypto(format!("argon2 wrap params: {e}")))?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+    argon2
+        .hash_password_into(ikm, salt, &mut key_out[..])
+        .map_err(|e: argon2::Error| LurpaxError::Crypto(format!("argon2 wrap: {e}")))?;
     Ok(())
 }
 

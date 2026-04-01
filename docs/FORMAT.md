@@ -1,4 +1,4 @@
-# Lurpax `.lurpax` binary format (v1)
+# Lurpax `.lurpax` binary format (v1 / v2 header)
 
 Multi-byte integers are **little-endian**. Magic: ASCII `LURPX` (5 bytes).
 
@@ -15,11 +15,11 @@ Multi-byte integers are **little-endian**. Magic: ASCII `LURPX` (5 bytes).
 | EOF−9 | Tail header length | `u32` |
 | EOF−5 | Tail magic | 5 (`LURPX`) |
 
-## Header body (v1)
+## Header body
 
-Serialized sequentially, no padding:
+Serialized sequentially, no padding. Fields **1–15** are shared; the tail depends on `version`.
 
-1. `version: u16` — must be `1`
+1. `version: u16` — `1` (v1) or `2` (v2 YubiKey layout)
 2. `kdf_algorithm: u8` — `1` = Argon2id
 3. `argon2_mem_kib: u32`
 4. `argon2_iterations: u32`
@@ -27,14 +27,18 @@ Serialized sequentially, no padding:
 6. `salt: [u8; 32]`
 7. `base_nonce: [u8; 24]`
 8. `key_commitment: [u8; 32]`
-9. `chunk_plaintext_size: u32` — v1 fixed `65536`
+9. `chunk_plaintext_size: u32` — fixed `65536`
 10. `chunk_count: u64`
 11. `compressed_payload_size: u64`
-12. `rs_data_shards_per_group: u16` — v1 fixed `19`
-13. `rs_parity_shards_per_group: u16` — v1 fixed `3`
+12. `rs_data_shards_per_group: u16` — fixed `19`
+13. `rs_parity_shards_per_group: u16` — fixed `3`
 14. `yubi_required: u8` — `0` or `1`
 15. `yubi_slot: u8` — `0`, `1`, or `2`
-16. `yubi_challenge: [u8; 32]`
+
+### Tail (version-specific)
+
+- **`version == 1`:** `yubi_challenge: [u8; 32]` — plaintext challenge when `yubi_required`; otherwise zero. Header body length **161** bytes.
+- **`version == 2`:** YubiKey vaults only. `yubi_wrap_salt: [u8; 32]`, `yubi_chal_nonce: [u8; 24]`, `yubi_chal_ciphertext: [u8; 48]` (XChaCha20-Poly1305 of the 32-byte challenge; key from password-only Argon2id with `yubi_wrap_salt`). Plaintext challenge is **not** stored. Header body length **233** bytes.
 
 ## Shards
 

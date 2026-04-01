@@ -19,6 +19,9 @@ fn test_header(chunk_count: u64, compressed_payload_size: u64) -> Header {
         yubi_required: false,
         yubi_slot: 0,
         yubi_challenge: [0u8; 32],
+        yubi_wrap_salt: [0u8; 32],
+        yubi_chal_nonce: [0u8; 24],
+        yubi_chal_ciphertext: [0u8; 48],
     }
 }
 
