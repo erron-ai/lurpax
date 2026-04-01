@@ -21,6 +21,7 @@ jobs:
         env:
           HOMEBREW_TAP_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           g="${{ secrets.GH_TOKEN }}"
@@ -30,4 +31,4 @@ jobs:
             echo "::error::Set GH_TOKEN or HOMEBREW_TAP_TOKEN in repository secrets."
             exit 1
           fi
-          bash scripts/push_homebrew_tap.sh "${{ inputs.tag }}"
+          bash scripts/push_homebrew_tap.sh "${TAG}"

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Update and push Homebrew tap after a lurpax GitHub release exists for TAG.
 # macOS / Linux. Requires: git, curl, awk, python3.
+# Clone uses GIT_ASKPASS so the PAT is not embedded in the remote URL (avoids token in .git/config / logs).
 #
 # Env:
 #   TAP_PUSH_TOKEN or HOMEBREW_TAP_TOKEN — PAT with contents:write on the tap repo
 #   LURPAX_REPO — owner/name (default: GITHUB_REPOSITORY or origin remote)
 #   HOMEBREW_TAP_REPO or TAP_REPO — tap owner/name (default: <lurpax-owner>/homebrew-tap)
 set -euo pipefail
+
+CURL="${CURL:-/usr/bin/curl}"
 
 TAG="${1:?usage: $0 v0.1.0}"
 if [[ ! "${TAG}" =~ ^v[0-9] ]]; then
@@ -61,7 +64,7 @@ fi
 unset _l _g
 
 curl_release_asset() {
-  curl -fsSL -H "Authorization: Bearer ${RELEASE_FETCH_TOKEN}" "$1"
+  "$CURL" -fsSL -H "Authorization: Bearer ${RELEASE_FETCH_TOKEN}" "$1"
 }
 
 targets=(
@@ -91,7 +94,26 @@ tmpdir="$(mktemp -d)"
 cleanup() { rm -rf "${tmpdir}"; }
 trap cleanup EXIT
 
-git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/${TAP_SLUG}.git" "${tmpdir}/tap"
+umask 077
+printf '%s' "${TOKEN}" > "${tmpdir}/.git-askpass-secret"
+chmod 600 "${tmpdir}/.git-askpass-secret"
+cat > "${tmpdir}/git-askpass" <<'EOS'
+#!/bin/sh
+case "$1" in
+  *[Uu]sername*|*[Uu]ser*for*)
+    printf '%s\n' "git"
+    ;;
+  *)
+    tr -d '\n\r' < "$(dirname "$0")/.git-askpass-secret"
+    printf '\n'
+    ;;
+esac
+EOS
+chmod 700 "${tmpdir}/git-askpass"
+GIT_ASKPASS="${tmpdir}/git-askpass"
+GIT_TERMINAL_PROMPT=0
+export GIT_ASKPASS GIT_TERMINAL_PROMPT
+git clone --depth 1 "https://github.com/${TAP_SLUG}.git" "${tmpdir}/tap"
 
 python3 "${REPO_ROOT}/scripts/update_homebrew_formula.py" "${tmpdir}/tap/Formula/lurpax.rb" \
   --version "${VER}" \

@@ -219,11 +219,8 @@ impl VaultService {
         if output.exists() {
             return Err(LurpaxError::OutputExists);
         }
-        let partial = output.with_extension("lurpax.partial");
-        if partial.exists() {
-            eprintln!("warning: removing stale partial vault file from interrupted create");
-            std::fs::remove_file(&partial)?;
-        }
+        // Stale `*.lurpax.partial` from an interrupted create is handled atomically in
+        // `write_atomic` via `create_new` (O_EXCL); no prior `exists`/`remove_file` pair (CWE-367).
         check_interrupted(term.as_ref())?;
         let tar = tar_input(input, &limits)?;
         check_interrupted(term.as_ref())?;
@@ -375,7 +372,8 @@ impl VaultService {
             let chal = match header.version {
                 HEADER_VERSION_V1 => header.yubi_challenge,
                 HEADER_VERSION_V2 => {
-                    let z = crate::crypto::yubi_challenge_wrap::unwrap_challenge(password, &header)?;
+                    let z =
+                        crate::crypto::yubi_challenge_wrap::unwrap_challenge(password, &header)?;
                     *z
                 }
                 _ => {

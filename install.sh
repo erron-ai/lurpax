@@ -1,11 +1,37 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Prefer known system paths so a hostile PATH cannot substitute curl/tar/sha tools (CWE-426).
+CURL="${CURL:-/usr/bin/curl}"
+TAR="${TAR:-/bin/tar}"
+
 REPO="${LURPAX_REPO:-erron-ai/lurpax}"
 INSTALL_DIR="${LURPAX_INSTALL_DIR:-/usr/local/bin}"
 
 info()  { printf '\033[1;34m%s\033[0m\n' "$*"; }
 err()   { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
+
+require_tools() {
+    [ -x "$CURL" ] || err "curl not found or not executable at $CURL (set CURL to a trusted path)"
+    [ -x "$TAR" ] || err "tar not found or not executable at $TAR (set TAR to a trusted path)"
+    if [ -x /usr/bin/sha256sum ]; then
+        :
+    elif [ -x /usr/sbin/shasum ]; then
+        :
+    else
+        err "need SHA-256 at /usr/bin/sha256sum or /usr/sbin/shasum"
+    fi
+}
+
+# Print lowercase hex SHA-256 of file $1 (no newline in output).
+sha256_hex_file() {
+    local f="$1"
+    if [ -x /usr/bin/sha256sum ]; then
+        /usr/bin/sha256sum "$f" | awk '{print $1}'
+    else
+        /usr/sbin/shasum -a 256 "$f" | awk '{print $1}'
+    fi
+}
 
 detect_target() {
     local os arch
@@ -33,7 +59,7 @@ get_latest_tag() {
     # tags alone do not count).
     local response http_code body tag
     response="$(
-        curl -sS -w $'\n%{http_code}' \
+        "$CURL" -sS -w $'\n%{http_code}' \
             "https://api.github.com/repos/${REPO}/releases/latest"
     )" || err "failed to contact GitHub (network or TLS error). Try again or install from source (see README)."
     http_code="${response##*$'\n'}"
@@ -44,7 +70,7 @@ get_latest_tag() {
             ;;
         404)
             body="$(
-                curl -sS -w $'\n%{http_code}' \
+                "$CURL" -sS -w $'\n%{http_code}' \
                     "https://api.github.com/repos/${REPO}/releases?per_page=1"
             )" || err "failed to contact GitHub (network or TLS error). Try again or install from source (see README)."
             http_code="${body##*$'\n'}"
@@ -57,7 +83,7 @@ get_latest_tag() {
                 tag="$(printf '%s\n' "$body" | grep -m1 '"tag_name"' | cut -d'"' -f4)"
             else
                 body="$(
-                    curl -sS -w $'\n%{http_code}' \
+                    "$CURL" -sS -w $'\n%{http_code}' \
                         "https://api.github.com/repos/${REPO}/tags?per_page=100"
                 )" || err "failed to contact GitHub (network or TLS error). Try again or install from source (see README)."
                 http_code="${body##*$'\n'}"
@@ -89,6 +115,7 @@ get_latest_tag() {
 main() {
     local target tag name url tmpdir
 
+    require_tools
     target="$(detect_target)"
     tag="${1:-$(get_latest_tag)}"
     name="lurpax-${tag}-${target}"
@@ -98,24 +125,20 @@ main() {
     tmpdir="$(mktemp -d)"
     trap 'rm -rf "$tmpdir"' EXIT
 
-    curl -fsSL "$url" -o "${tmpdir}/${name}.tar.gz" \
+    "$CURL" -fsSL "$url" -o "${tmpdir}/${name}.tar.gz" \
         || err "failed to download ${url}. If the tag exists but install still fails, the release workflow may not have published binaries yet (GitHub Release + assets), or pick another tag: $0 TAG"
 
     info "verifying SHA-256 checksum..."
-    curl -fsSL "https://github.com/${REPO}/releases/download/${tag}/${name}.tar.gz.sha256" \
+    "$CURL" -fsSL "https://github.com/${REPO}/releases/download/${tag}/${name}.tar.gz.sha256" \
         -o "${tmpdir}/${name}.tar.gz.sha256" \
         || err "failed to download ${name}.tar.gz.sha256 (release assets must include .sha256 sidecars)"
     expected="$(awk '{print $1}' "${tmpdir}/${name}.tar.gz.sha256")"
     [[ -n "${expected}" && "${#expected}" -eq 64 ]] || err "invalid checksum file from release"
-    if command -v shasum >/dev/null 2>&1; then
-        actual="$(shasum -a 256 "${tmpdir}/${name}.tar.gz" | awk '{print $1}')"
-    else
-        actual="$(sha256sum "${tmpdir}/${name}.tar.gz" | awk '{print $1}')"
-    fi
+    actual="$(sha256_hex_file "${tmpdir}/${name}.tar.gz")"
     [[ "${actual}" == "${expected}" ]] \
         || err "SHA-256 mismatch for ${name}.tar.gz (expected ${expected}, got ${actual})"
 
-    tar xzf "${tmpdir}/${name}.tar.gz" -C "$tmpdir"
+    "$TAR" -xzf "${tmpdir}/${name}.tar.gz" -C "$tmpdir"
 
     info "installing to ${INSTALL_DIR}/lurpax..."
     mkdir -p "$INSTALL_DIR"

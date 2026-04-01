@@ -1,6 +1,6 @@
 [package]
 name = "lurpax"
-version = "0.10.0"
+version = "0.11.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Lurpax — encrypted snapshot vault CLI (Erron.ai)"
@@ -29,7 +29,7 @@ hkdf = "=0.12.4"
 # HMAC-SHA256 key commitment (domain-separated from AEAD key, pinned per audit policy)
 hmac = "=0.12.1"
 sha2 = "=0.10.8"
-# XChaCha20-Poly1305 per-chunk AEAD (pinned per audit policy)
+# XChaCha20-Poly1305 per-chunk AEAD (pinned per audit policy; crates.io stable 0.10 line)
 chacha20poly1305 = "=0.10.1"
 
 # Reed–Solomon parity shards for burst corruption recovery

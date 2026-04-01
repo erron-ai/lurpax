@@ -79,8 +79,10 @@ jobs:
 
       - name: Package
         shell: bash
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
         run: |
-          tag="${{ env.RELEASE_TAG }}"
+          tag="${TAG}"
           name="lurpax-${tag}-${{ matrix.target }}"
           mkdir "$name"
           cp "target/${{ matrix.target }}/release/lurpax" "$name/"

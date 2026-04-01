@@ -3,9 +3,7 @@ target/
 **/*.rs.bk
 .cargo/credentials.toml
 # example/ — ignore local junk; keep checked-in e2e helper
-example/*
-!example/.gitkeep
-!example/e2e_corruption_test.sh
+
 
 # Local env and secrets (never commit)
 .env

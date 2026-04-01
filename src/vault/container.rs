@@ -163,7 +163,15 @@ pub fn write_atomic(
         use std::os::unix::fs::OpenOptionsExt;
         oo.mode(0o600);
     }
-    let mut f = oo.open(&tmp)?;
+    let mut f = match oo.open(&tmp) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(LurpaxError::InvalidVault(
+                "temporary vault file from a previous interrupted create already exists — remove the `.lurpax.partial` file next to the output path and retry".into(),
+            ));
+        }
+        Err(e) => return Err(e.into()),
+    };
     let n = u32::try_from(header_body.len()).map_err(|_| LurpaxError::Overflow)?;
     let write_body = (|| -> Result<()> {
         f.write_all(MAGIC)?;

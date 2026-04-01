@@ -6,23 +6,23 @@ Line counts are `wc -l` on source as of the last doc refresh; use `wc -l src/**/
 
 | Path | Lines | Notes |
 |------|------:|-------|
-| `src/vault/service.rs` | 430 | Create / open / verify orchestration |
-| `src/vault/header.rs` | 344 | Hand-rolled LE header; schema validation |
-| `src/archive/tar.rs` | 277 | Pack input; bounded extract |
-| `src/cli.rs` | 252 | Argument surface, limits, YubiKey wiring |
-| `src/vault/container.rs` | 197 | On-disk layout, atomic write, payload read |
-| `src/crypto/stream.rs` | 168 | Per-chunk nonce, AAD, XChaCha20-Poly1305 |
-| `src/hardware/yubikey.rs` | 164 | `ykman` resolution and validation |
-| `src/constants.rs` | 91 | Centralized numeric policy |
-| `src/errors/mod.rs` | 92 | Typed errors, verify health |
-| `src/crypto/kdf.rs` | 74 | Argon2id, HKDF, IKM composition |
-| `src/recovery/fec.rs` | 66 | Reed–Solomon repair |
-| `src/recovery/checksum.rs` | 62 | CRC-32C table (non-crypto) |
-| `src/main.rs` | 58 | Entry, hardening hooks |
-| `src/crypto/encryption.rs` | 36 | HMAC key commitment |
-| `tests/header_serialization.rs` | 34 | Header round-trip |
-| `tests/vault_roundtrip.rs` | 60 | End-to-end vault |
-| `tests/rs_group.rs` | 17 | RS grouping |
+| `src/vault/service.rs` | 589 | Create / open / verify orchestration |
+| `src/vault/header.rs` | 414 | Hand-rolled LE header; schema validation |
+| `src/archive/tar.rs` | 300 | Pack input; bounded extract |
+| `src/cli.rs` | 294 | Argument surface, limits, YubiKey wiring |
+| `src/vault/container.rs` | 237 | On-disk layout, atomic write, payload read |
+| `src/crypto/stream.rs` | 155 | Per-chunk nonce, AAD, XChaCha20-Poly1305 |
+| `src/hardware/yubikey.rs` | 239 | `ykman` resolution and validation |
+| `src/constants.rs` | 106 | Centralized numeric policy |
+| `src/errors/mod.rs` | 105 | Typed errors, verify health |
+| `src/crypto/kdf.rs` | 96 | Argon2id, HKDF, IKM composition |
+| `src/recovery/fec.rs` | 60 | Reed–Solomon repair |
+| `src/recovery/checksum.rs` | 57 | CRC-32C table (non-crypto) |
+| `src/main.rs` | 64 | Entry, hardening hooks |
+| `src/crypto/encryption.rs` | 33 | HMAC key commitment |
+| `tests/header_serialization.rs` | 151 | Header round-trip |
+| `tests/vault_roundtrip.rs` | 78 | End-to-end vault |
+| `tests/rs_group.rs` | 15 | RS grouping |
 | `src/lib.rs` | 29 | Crate root, re-exports |
 | `src/crypto/mod.rs` | 9 | Crypto submodule facade |
 | `src/vault/mod.rs` | 9 | Vault submodule facade |
@@ -59,16 +59,16 @@ rg '// AUDIT:' src/
 
 Current index (file:line — re-run `rg` before a formal audit):
 
-- `src/main.rs`: 24, 37
-- `src/archive/tar.rs`: 157, 192, 224, 232, 273
-- `src/crypto/encryption.rs`: 12, 28
-- `src/crypto/kdf.rs`: 15, 48, 63
-- `src/crypto/stream.rs`: 13, 37, 60
-- `src/hardware/yubikey.rs`: 25, 68
+- `src/main.rs`: 24, 39
+- `src/archive/tar.rs`: 172, 212, 244, 252, 293
+- `src/crypto/encryption.rs`: 12, 29
+- `src/crypto/kdf.rs`: 19, 52, 85
+- `src/crypto/stream.rs`: 13, 32, 55
+- `src/hardware/yubikey.rs`: 30, 77
 - `src/recovery/checksum.rs`: 9
-- `src/vault/container.rs`: 153, 170
-- `src/vault/header.rs`: 168, 208, 339
-- `src/vault/service.rs`: 92, 249, 290, 311, 331
+- `src/vault/container.rs`: 158, 184, 201
+- `src/vault/header.rs`: 200, 243, 409
+- `src/vault/service.rs`: 86, 313, 358, 364, 392, 401, 418, 459
 
 ## Running the test suite
 
@@ -117,3 +117,7 @@ The script runs `cargo llvm-cov` with **98%** thresholds on lines, functions, an
 ## Coverage (CI)
 
 CI runs eight parallel gates on **macOS** (`macos-latest`): `fmt`, `clippy`, `test`, `doc`, `deny`, `audit`, `msrv` (Rust 1.74 `cargo check`), and `coverage` (`cargo-llvm-cov` at 70% line/function minimum until the suite matures). Local `scripts/coverage.sh` enforces stricter thresholds for pre-release audit prep.
+
+## Release tooling
+
+- **`scripts/push_homebrew_tap.sh`** — Updates the Homebrew tap after a release. It clones the tap over HTTPS with **`GIT_ASKPASS`** (credentials from **`TAP_PUSH_TOKEN`** or **`HOMEBREW_TAP_TOKEN`**) so a PAT is not embedded in the `git clone` URL. Release asset checksums are fetched with **`/usr/bin/curl`** by default (`CURL` override allowed).
