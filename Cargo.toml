@@ -20,7 +20,7 @@ path = "src/main.rs"
 clap = { version = "4.5", features = ["derive"] }
 rpassword = "7.3"
 # Typed errors for auditable failure paths (rejected anyhow: opaque)
-thiserror = "1.0"
+thiserror = "2.0"
 
 # Password hashing — Argon2id only in v1
 argon2 = "=0.5.3"
