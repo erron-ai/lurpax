@@ -50,7 +50,7 @@ getrandom = "=0.2.17"
 # Cooperative shutdown without unsafe signal-handler work
 signal-hook = "0.3.17"
 # RLIMIT_CORE / platform hooks for hardening
-libc = "0.2.169"
+libc = "0.2.184"
 
 [dev-dependencies]
 proptest = "1"
