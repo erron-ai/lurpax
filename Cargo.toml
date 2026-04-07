@@ -48,7 +48,7 @@ memsec = "=0.6.3"
 # OS CSPRNG — failures are fatal (no userland fallback)
 getrandom = "=0.2.17"
 # Cooperative shutdown without unsafe signal-handler work
-signal-hook = "0.3.17"
+signal-hook = "0.4.4"
 # RLIMIT_CORE / platform hooks for hardening
 libc = "0.2.169"
 
