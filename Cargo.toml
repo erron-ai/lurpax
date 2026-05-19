@@ -40,7 +40,7 @@ crc32c = "0.6.8"
 # Whole-stream compression before chunking (correct order: compress-then-encrypt chunks)
 zstd = "0.13.2"
 # Tar container for file tree snapshot
-tar = "0.4.41"
+tar = "0.4.46"
 
 # Zeroization of key material; memsec pins sensitive pages from swap where supported
 zeroize = { version = "=1.8.2", features = ["zeroize_derive"] }
